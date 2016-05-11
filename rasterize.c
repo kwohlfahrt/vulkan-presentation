@@ -304,7 +304,7 @@ int main(void) {
                 .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             }};
         VkAttachmentReference attachment_refs[NELEMS(attachments)] = {{
                 .attachment = 0,
@@ -593,6 +593,24 @@ int main(void) {
         };
         assert(vkBeginCommandBuffer(draw_buffer, &begin_info) == VK_SUCCESS);
         cmdDraw(draw_buffer, render_size, pipeline, pipeline_layout, render_pass, framebuffer);
+
+        VkImageMemoryBarrier draw_barrier = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .pNext = NULL,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL ,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .image = color_image,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+        vkCmdPipelineBarrier(draw_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &draw_barrier);
         VkBufferImageCopy copy = {
             .bufferOffset = 0,
             .bufferRowLength = 0, // Tightly packed
@@ -605,33 +623,65 @@ int main(void) {
         };
         vkCmdCopyImageToBuffer(draw_buffer, color_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                image_buffer, 1, &copy);
+
+        VkBufferMemoryBarrier transfer_barrier = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .pNext = 0,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_HOST_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer = image_buffer,
+            .offset = 0,
+            .size = VK_WHOLE_SIZE,
+        };
+        vkCmdPipelineBarrier(draw_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, NULL, 1, &transfer_barrier, 0, NULL);
         assert(vkEndCommandBuffer(draw_buffer) == VK_SUCCESS);
+    }
+
+    VkFence fence;
+    {
+        VkFenceCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            .pNext = 0,
+            .flags = 0,
+        };
+        assert(vkCreateFence(device, &create_info, NULL, &fence) == VK_SUCCESS);
     }
 
     // Wait for set-up to finish
     assert(vkQueueWaitIdle(queue) == VK_SUCCESS);
     {
-        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSubmitInfo submit_info = {
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
             .pNext = NULL,
             .waitSemaphoreCount = 0,
             .pWaitSemaphores = NULL,
-            .pWaitDstStageMask = &wait_stage,
+            .pWaitDstStageMask = NULL,
             .commandBufferCount = 1,
             .pCommandBuffers = &draw_buffer,
             .signalSemaphoreCount = 0,
             .pSignalSemaphores = NULL,
         };
-        assert(vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE) == VK_SUCCESS);
-        assert(vkQueueWaitIdle(queue) == VK_SUCCESS);
+        assert(vkQueueSubmit(queue, 1, &submit_info, fence) == VK_SUCCESS);
 
+        assert(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS);
         char * image_data;
         assert(vkMapMemory(device, image_buffer_memory, 0, VK_WHOLE_SIZE,
                            0, (void **) &image_data) == VK_SUCCESS);
+        VkMappedMemoryRange flush_range = {
+            .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .pNext = NULL,
+            .memory = image_buffer_memory,
+            .offset = 0,
+            .size = VK_WHOLE_SIZE,
+        };
+        assert(vkInvalidateMappedMemoryRanges(device, 1, &flush_range) == VK_SUCCESS);
         assert(writeTiff("rasterize.tif", image_data, render_size, nchannels) == 0);
         vkUnmapMemory(device, image_buffer_memory);
     }
+
+    assert(vkQueueWaitIdle(queue) == VK_SUCCESS);
+    vkDestroyFence(device, fence, NULL);
 
     vkDestroyFramebuffer(device, framebuffer, NULL);
     vkDestroyImage(device, color_image, NULL);
