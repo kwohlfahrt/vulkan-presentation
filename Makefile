@@ -1,7 +1,7 @@
-OBJECTS = info.o
+OBJECTS = info.o tiff.o
 
 rasterize : rasterize.c $(OBJECTS) rasterize.frag.spv rasterize.vert.spv
-	$(CC) -std=gnu11 $< $(OBJECTS) -DVK_USE_PLATFORM_XCB_KHR -lvulkan -lxcb -o $@ -g
+	$(CC) -std=gnu11 $< $(OBJECTS) -lvulkan -ltiff -o $@ -g
 
 %.o : %.c
 	$(CC) -std=gnu11 -c $< -o $@ -g
@@ -9,6 +9,9 @@ rasterize : rasterize.c $(OBJECTS) rasterize.frag.spv rasterize.vert.spv
 %.spv : %
 	glslangValidator -V -o $@ $<
 
+%.tif : %
+	./$<
+
 .PHONY : clean
 clean :
-	rm -f *.spv *.o rasterize
+	rm -f *.spv *.o *.tif rasterize

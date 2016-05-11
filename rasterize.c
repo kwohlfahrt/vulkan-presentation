@@ -1,4 +1,5 @@
-#include <time.h>
+#include "tiff.h"
+
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -6,11 +7,14 @@
 #include <string.h>
 #include <assert.h>
 #include <vulkan/vulkan.h>
-#include <xcb/xcb.h>
 
 #define NELEMS(x) (sizeof(x) / sizeof(*x))
 
-struct timespec frame_time = {.tv_sec = 0, .tv_nsec = 1000 * 1000 * 20,};
+const VkExtent2D render_size = {
+    .width = 640,
+    .height = 480,
+};
+const size_t nchannels = 4;
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType,
                                                    uint64_t object, size_t location, int32_t messageCode,
@@ -47,49 +51,50 @@ size_t loadModule(char * filename, uint32_t ** data) {
     return 0;
 }
 
-void createSwapchain(VkDevice device, VkSurfaceKHR surface, VkExtent2D size,
-                     uint32_t min_images, VkSwapchainKHR * swapchain,
-                     uint32_t * nimages, VkImage ** images, VkImageView** views) {
+void createFrameImage(VkDevice device, VkExtent2D size,
+                      VkFormat format, VkSampleCountFlagBits samples,
+                      VkImageUsageFlags usage, VkImageAspectFlags aspect,
+                      VkImage* image, VkDeviceMemory* memory, VkImageView* view) {
     {
-        VkSwapchainKHR old_swapchain = *swapchain;
-        VkSwapchainCreateInfoKHR create_info = {
-            .sType =  VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        VkImageCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .surface = surface,
-            .minImageCount = min_images,
-            .imageFormat = VK_FORMAT_B8G8R8A8_SRGB, //vkGetPhysicalDeviceSurfaceFormatsKHR
-            .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
-            .imageExtent = size,
-            .imageArrayLayers = 1,
-            .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-            .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .queueFamilyIndexCount = 0,
-            .pQueueFamilyIndices = NULL,
-            .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-            .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-            .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
-            .clipped = VK_TRUE,
-            .oldSwapchain = old_swapchain,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = format,
+            .extent = {size.width, size.height, 1,},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = samples,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = usage,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         };
-        assert(vkCreateSwapchainKHR(device, &create_info, NULL, swapchain) == VK_SUCCESS);
-        if (old_swapchain != VK_NULL_HANDLE)
-            vkDestroySwapchainKHR(device, old_swapchain, NULL);
+
+        assert(vkCreateImage(device, &create_info, NULL, image) == VK_SUCCESS);
     }
+    {
+        VkMemoryRequirements memory_requirements;
+        vkGetImageMemoryRequirements(device, *image, &memory_requirements);
 
-    vkGetSwapchainImagesKHR(device, *swapchain, nimages, NULL);
-    *images = malloc(*nimages * sizeof(**images));
-    vkGetSwapchainImagesKHR(device, *swapchain, nimages, *images);
-    *views = malloc(*nimages * sizeof(**views));
-
+        VkMemoryAllocateInfo allocate_info = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = NULL,
+            .allocationSize = memory_requirements.size,
+            .memoryTypeIndex = 0,
+        };
+        assert(vkAllocateMemory(device, &allocate_info, NULL, memory) == VK_SUCCESS);
+    }
+    assert(vkBindImageMemory(device, *image, *memory, 0) == VK_SUCCESS);
     {
         VkImageViewCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .image = NULL,
+            .image = *image,
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = VK_FORMAT_B8G8R8A8_SRGB,
+            .format = format,
             .components = {
                 .r = VK_COMPONENT_SWIZZLE_IDENTITY,
                 .g = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -97,65 +102,54 @@ void createSwapchain(VkDevice device, VkSurfaceKHR surface, VkExtent2D size,
                 .a = VK_COMPONENT_SWIZZLE_IDENTITY,
             },
             .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .aspectMask = aspect,
                 .baseMipLevel = 0,
                 .levelCount = 1,
                 .baseArrayLayer = 0,
                 .layerCount = 1,
             },
         };
-        for (size_t i = 0; i < *nimages; i++){
-            create_info.image = (*images)[i];
-            assert(vkCreateImageView(device, &create_info, NULL, &(*views)[i]) == VK_SUCCESS);
-        }
-    }
-}
-void cmdPrepareSwapchainImages(VkCommandBuffer cmd_buffer, uint32_t nswapchain_images,
-                               VkImage * swapchain_images) {
-    for (size_t i = 0; i < nswapchain_images; i++){
-        VkImageMemoryBarrier color_layout_barrier = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .pNext = NULL,
-            .srcAccessMask = 0,
-            .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
-            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            .image = swapchain_images[i],
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-        };
-        vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, NULL, 0, NULL, 1, &color_layout_barrier);
+        assert(vkCreateImageView(device, &create_info, NULL, view) == VK_SUCCESS);
     }
 }
 
-void createFramebuffers(VkDevice device, VkExtent2D size,
-                        uint32_t naux_views, VkImageView* aux_views,
-                        uint32_t nswapchain_images, VkImageView* swapchain_views,
-                        VkRenderPass render_pass, VkFramebuffer** framebuffers){
-    *framebuffers = malloc(nswapchain_images * sizeof(**framebuffers));
+void cmdPrepareFrameImage(VkCommandBuffer cmd_buffer, VkImage image, VkAccessFlags access,
+                          VkImageLayout layout, VkImageAspectFlags aspect) {
+  VkImageMemoryBarrier layout_barrier = {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+    .pNext = NULL,
+    .srcAccessMask = 0,
+    .dstAccessMask = access,
+    .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    .newLayout = layout,
+    .image = image,
+    .subresourceRange = {
+      .aspectMask = aspect,
+      .baseMipLevel = 0,
+      .levelCount = 1,
+      .baseArrayLayer = 0,
+      .layerCount = 1,
+    },
+  };
+  vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, NULL, 0, NULL, 1, &layout_barrier);
+}
 
-    VkImageView * attachments = malloc((1 + naux_views) * sizeof(*attachments));
-    memcpy(&attachments[1], aux_views, sizeof(*aux_views) * naux_views);
+
+void createFramebuffer(VkDevice device, VkExtent2D size,
+                       uint32_t nviews, VkImageView* views,
+                       VkRenderPass render_pass, VkFramebuffer* framebuffer){
     VkFramebufferCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,
         .renderPass = render_pass,
-        .attachmentCount = 1 + naux_views,
-        .pAttachments = attachments,
+        .attachmentCount = nviews,
+        .pAttachments = views,
         .width = size.width,
         .height = size.height,
         .layers = 1,
     };
-    for (size_t i = 0; i < nswapchain_images; i++){
-        attachments[0] = swapchain_views[i];
-        assert(vkCreateFramebuffer(device, &create_info, NULL, &(*framebuffers)[i]) == VK_SUCCESS);
-    }
+    assert(vkCreateFramebuffer(device, &create_info, NULL, framebuffer) == VK_SUCCESS);
 }
 
 void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
@@ -206,34 +200,11 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
     vkCmdEndRenderPass(draw_buffer);
 }
 
-VkSurfaceCapabilitiesKHR getSurfaceCapabilities(VkPhysicalDevice phy_device, VkSurfaceKHR surface){
-    VkSurfaceCapabilitiesKHR surface_caps;
-    assert(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(phy_device, surface, &surface_caps) == VK_SUCCESS);
-    return surface_caps;
-}
-
 int main(void) {
-    xcb_connection_t* xcb_conn = xcb_connect(NULL, NULL);
-    assert(xcb_connection_has_error(xcb_conn) == 0);
-    xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(xcb_conn)).data;
-    xcb_window_t window = xcb_generate_id(xcb_conn);
-    {
-        uint32_t value_mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-        uint32_t values[32] = {
-            [0] = screen->black_pixel,
-            [1] = XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY,
-        };
-        xcb_create_window(xcb_conn, XCB_COPY_FROM_PARENT, window, screen->root, 0, 0, 240, 240, 1, XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, value_mask, values);
-        xcb_map_window(xcb_conn, window);
-        xcb_flush(xcb_conn);
-    }
-
     VkInstance instance;
     {
-        const char surface_ext[] = "VK_KHR_surface";
-        const char xcb_ext[] = "VK_KHR_xcb_surface";
         const char debug_ext[] = "VK_EXT_debug_report";
-        const char* extensions[] = {surface_ext, xcb_ext, debug_ext};
+        const char* extensions[] = {debug_ext,};
 
         const char validation_layer[] = "VK_LAYER_LUNARG_standard_validation";
         const char* layers[] = {validation_layer,};
@@ -268,18 +239,6 @@ int main(void) {
         assert(createDebugReportCallback(instance, &create_info, NULL, &debug_callback) == VK_SUCCESS);
     }
 
-    VkSurfaceKHR surface;
-    {
-        VkXcbSurfaceCreateInfoKHR create_info = {
-            .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
-            .pNext = NULL,
-            .flags = 0,
-            .connection = xcb_conn,
-            .window = window,
-        };
-        assert(vkCreateXcbSurfaceKHR(instance, &create_info, NULL, &surface) == VK_SUCCESS);
-    }
-
     VkPhysicalDevice phy_device;
     {
         uint32_t num_devices;
@@ -292,9 +251,6 @@ int main(void) {
     VkDevice device;
     {
         float queue_priorities[] = {1.0};
-        const char swapchain_ext[] = "VK_KHR_swapchain";
-        const char* extensions[] = {swapchain_ext,};
-
         const char validation_layer[] = "VK_LAYER_LUNARG_standard_validation";
         const char* layers[] = {validation_layer,};
 
@@ -315,15 +271,13 @@ int main(void) {
             .pQueueCreateInfos = queue_info,
             .enabledLayerCount = NELEMS(layers),
             .ppEnabledLayerNames = layers,
-            .enabledExtensionCount = NELEMS(extensions),
-            .ppEnabledExtensionNames = extensions,
+            .enabledExtensionCount = 0,
+            .ppEnabledExtensionNames = NULL,
             .pEnabledFeatures = NULL,
         };
 
         assert(vkCreateDevice(phy_device, &create_info, NULL, &device) == VK_SUCCESS);
     }
-
-    VkSurfaceCapabilitiesKHR surface_caps = getSurfaceCapabilities(phy_device, surface);
 
     VkQueue queue;
     vkGetDeviceQueue(device, 0, 0, &queue);
@@ -343,14 +297,14 @@ int main(void) {
     {
         VkAttachmentDescription attachments[] = {{
                 .flags = 0,
-                .format = VK_FORMAT_B8G8R8A8_SRGB,
+                .format = VK_FORMAT_R8G8B8A8_UNORM,
                 .samples = VK_SAMPLE_COUNT_1_BIT,
                 .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                 .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             }};
         VkAttachmentReference attachment_refs[NELEMS(attachments)] = {{
                 .attachment = 0,
@@ -382,15 +336,41 @@ int main(void) {
         assert(vkCreateRenderPass(device, &create_info, NULL, &render_pass) == VK_SUCCESS);
     }
 
-    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-    uint32_t nswapchain_images;
-    VkImage* swapchain_images;
-    VkImageView* swapchain_views;
-    // vkAcquireNextImageKHR guaranteed to be non blocking with min+1 images and mailbox mode
-    createSwapchain(device, surface, surface_caps.currentExtent, surface_caps.minImageCount + 1,
-                    &swapchain, &nswapchain_images, &swapchain_images, &swapchain_views);
-    VkFramebuffer* framebuffers;
-    createFramebuffers(device, surface_caps.currentExtent, 0, NULL, nswapchain_images, swapchain_views, render_pass, &framebuffers);
+    VkImage color_image;
+    VkDeviceMemory color_image_memory;
+    VkImageView color_view;
+    createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT,
+                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                     VK_IMAGE_ASPECT_COLOR_BIT,
+                     &color_image, &color_image_memory, &color_view);
+
+    VkBuffer image_buffer;
+    VkDeviceMemory image_buffer_memory;
+    {
+        VkBufferCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .size = render_size.height * render_size.width * nchannels,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        };
+        assert(vkCreateBuffer(device, &create_info, NULL, &image_buffer) == VK_SUCCESS);
+        VkMemoryRequirements memory_requirements;
+        vkGetBufferMemoryRequirements(device, image_buffer, &memory_requirements);
+
+        VkMemoryAllocateInfo allocate_info = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = NULL,
+            .allocationSize = memory_requirements.size,
+            .memoryTypeIndex = 0, //VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+        };
+        assert(vkAllocateMemory(device, &allocate_info, NULL, &image_buffer_memory) == VK_SUCCESS);
+        assert(vkBindBufferMemory(device, image_buffer, image_buffer_memory, 0) == VK_SUCCESS);
+    }
+
+    VkFramebuffer framebuffer;
+    createFramebuffer(device, render_size, 1, &color_view, render_pass, &framebuffer);
 
     VkShaderModule vertex_shader, fragment_shader;
     {
@@ -564,6 +544,7 @@ int main(void) {
     }
 
     VkCommandBuffer setup_buffer;
+    VkCommandBuffer draw_buffer;
     {
         VkCommandBufferAllocateInfo allocate_info = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -573,6 +554,7 @@ int main(void) {
             .commandBufferCount = 1,
         };
         assert(vkAllocateCommandBuffers(device, &allocate_info, &setup_buffer) == VK_SUCCESS);
+        assert(vkAllocateCommandBuffers(device, &allocate_info, &draw_buffer) == VK_SUCCESS);
     }
 
     {
@@ -583,7 +565,8 @@ int main(void) {
             .pInheritanceInfo = NULL,
         };
         assert(vkBeginCommandBuffer(setup_buffer, &begin_info) == VK_SUCCESS);
-        cmdPrepareSwapchainImages(setup_buffer, nswapchain_images, swapchain_images);
+        cmdPrepareFrameImage(setup_buffer, color_image, VK_ACCESS_TRANSFER_READ_BIT,
+                             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
         assert(vkEndCommandBuffer(setup_buffer) == VK_SUCCESS);
 
         VkSubmitInfo submit_info = {
@@ -601,18 +584,6 @@ int main(void) {
         assert(vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE) == VK_SUCCESS);
     }
 
-    VkCommandBuffer* draw_buffers = malloc(nswapchain_images * sizeof(*draw_buffers));
-    {
-        VkCommandBufferAllocateInfo allocate_info = {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .pNext = NULL,
-            .commandPool = cmd_pool,
-            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount = nswapchain_images,
-        };
-        assert(vkAllocateCommandBuffers(device, &allocate_info, draw_buffers) == VK_SUCCESS);
-    }
-
     {
         VkCommandBufferBeginInfo begin_info = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -620,128 +591,55 @@ int main(void) {
             .flags = 0,
             .pInheritanceInfo = NULL,
         };
-        for (size_t i = 0; i < nswapchain_images; i++){
-            assert(vkBeginCommandBuffer(draw_buffers[i], &begin_info) == VK_SUCCESS);
-            cmdDraw(draw_buffers[i], surface_caps.currentExtent, pipeline, pipeline_layout,
-                    render_pass, framebuffers[i]);
-            assert(vkEndCommandBuffer(draw_buffers[i]) == VK_SUCCESS);
-        }
-    }
-
-    VkSemaphore image_acquire_sem;
-    VkSemaphore render_sem;
-    {
-        VkSemaphoreCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
+        assert(vkBeginCommandBuffer(draw_buffer, &begin_info) == VK_SUCCESS);
+        cmdDraw(draw_buffer, render_size, pipeline, pipeline_layout, render_pass, framebuffer);
+        VkBufferImageCopy copy = {
+            .bufferOffset = 0,
+            .bufferRowLength = 0, // Tightly packed
+            .bufferImageHeight = 0, // Tightly packed
+            .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            .imageOffset = {0, 0, 0},
+            .imageExtent = {.width = render_size.width,
+                            .height = render_size.height,
+                            .depth = 1},
         };
-        assert(vkCreateSemaphore(device, &create_info, NULL, &image_acquire_sem) == VK_SUCCESS);
-        assert(vkCreateSemaphore(device, &create_info, NULL, &render_sem) == VK_SUCCESS);
+        vkCmdCopyImageToBuffer(draw_buffer, color_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               image_buffer, 1, &copy);
+        assert(vkEndCommandBuffer(draw_buffer) == VK_SUCCESS);
     }
 
     // Wait for set-up to finish
     assert(vkQueueWaitIdle(queue) == VK_SUCCESS);
     {
-        while (true) {
-            uint32_t next_image_idx;
-            VkResult acquire_err;
-            acquire_err = vkAcquireNextImageKHR(device, swapchain, 0, image_acquire_sem, VK_NULL_HANDLE, &next_image_idx);
-            if (acquire_err == VK_ERROR_OUT_OF_DATE_KHR
-                || acquire_err == VK_SUBOPTIMAL_KHR){
-                // Window closed
-                if (xcb_connection_has_error(xcb_conn))
-                    break;
+        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkSubmitInfo submit_info = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .pNext = NULL,
+            .waitSemaphoreCount = 0,
+            .pWaitSemaphores = NULL,
+            .pWaitDstStageMask = &wait_stage,
+            .commandBufferCount = 1,
+            .pCommandBuffers = &draw_buffer,
+            .signalSemaphoreCount = 0,
+            .pSignalSemaphores = NULL,
+        };
+        assert(vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE) == VK_SUCCESS);
+        assert(vkQueueWaitIdle(queue) == VK_SUCCESS);
 
-                for (size_t i = 0; i < nswapchain_images; i++){
-                    vkDestroyFramebuffer(device, framebuffers[i], NULL);
-                    vkDestroyImageView(device, swapchain_views[i], NULL);
-                }
-
-                surface_caps = getSurfaceCapabilities(phy_device, surface);
-
-                createSwapchain(device, surface, surface_caps.currentExtent, surface_caps.minImageCount + 1,
-                                &swapchain, &nswapchain_images, &swapchain_images, &swapchain_views);
-                createFramebuffers(device, surface_caps.currentExtent, 0, NULL, nswapchain_images, swapchain_views, render_pass, &framebuffers);
-
-                VkCommandBufferBeginInfo begin_info = {
-                    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-                    .pNext = NULL,
-                    .flags = 0,
-                    .pInheritanceInfo = NULL,
-                };
-                for (size_t i = 0; i < nswapchain_images; i++){
-                    assert(vkResetCommandBuffer(draw_buffers[i], 0) == VK_SUCCESS);
-                    assert(vkBeginCommandBuffer(draw_buffers[i], &begin_info) == VK_SUCCESS);
-                    cmdDraw(draw_buffers[i], surface_caps.currentExtent, pipeline, pipeline_layout,
-                            render_pass, framebuffers[i]);
-                    assert(vkEndCommandBuffer(draw_buffers[i]) == VK_SUCCESS);
-                }
-
-                vkDestroySemaphore(device, image_acquire_sem, NULL);
-                VkSemaphoreCreateInfo create_info = {
-                    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-                    .pNext = NULL,
-                    .flags = 0,
-                };
-                assert(vkCreateSemaphore(device, &create_info, NULL, &image_acquire_sem) == VK_SUCCESS);
-
-                assert(vkResetCommandBuffer(setup_buffer, 0) == VK_SUCCESS);
-                assert(vkBeginCommandBuffer(setup_buffer, &begin_info) == VK_SUCCESS);
-                cmdPrepareSwapchainImages(setup_buffer, nswapchain_images, swapchain_images);
-                assert(vkEndCommandBuffer(setup_buffer) == VK_SUCCESS);
-                VkSubmitInfo submit_info = {
-                    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                    .pNext = NULL,
-                    .waitSemaphoreCount = 0,
-                    .pWaitSemaphores = NULL,
-                    .pWaitDstStageMask = NULL,
-                    .commandBufferCount = 1,
-                    .pCommandBuffers = &setup_buffer,
-                    .signalSemaphoreCount = 0,
-                    .pSignalSemaphores = NULL,
-                };
-                assert(vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE) == VK_SUCCESS);
-                assert(vkQueueWaitIdle(queue) == VK_SUCCESS);
-                continue;
-            } else {
-                assert(acquire_err == VK_SUCCESS);
-            }
-
-            VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            VkSubmitInfo submit_info = {
-                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                .pNext = NULL,
-                .waitSemaphoreCount = 1,
-                .pWaitSemaphores = &image_acquire_sem,
-                .pWaitDstStageMask = &wait_stage,
-                .commandBufferCount = 1,
-                .pCommandBuffers = &draw_buffers[next_image_idx],
-                .signalSemaphoreCount = 1,
-                .pSignalSemaphores = &render_sem,
-            };
-            assert(vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE) == VK_SUCCESS);
-
-            VkPresentInfoKHR present_info = {
-                .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-                .pNext = NULL,
-                .waitSemaphoreCount = 1,
-                .pWaitSemaphores = &render_sem,
-                .swapchainCount = 1,
-                .pSwapchains = &swapchain,
-                .pImageIndices = &next_image_idx,
-                .pResults = NULL,
-            };
-            assert(vkQueuePresentKHR(queue, &present_info) == VK_SUCCESS);
-            assert(vkQueueWaitIdle(queue) == VK_SUCCESS);
-            nanosleep(&frame_time, NULL);
-        }
+        char * image_data;
+        assert(vkMapMemory(device, image_buffer_memory, 0, VK_WHOLE_SIZE,
+                           0, (void **) &image_data) == VK_SUCCESS);
+        assert(writeTiff("rasterize.tif", image_data, render_size, nchannels) == 0);
+        vkUnmapMemory(device, image_buffer_memory);
     }
 
-    for (size_t i = 0; i < nswapchain_images; i++){
-        vkDestroyFramebuffer(device, framebuffers[i], NULL);
-        vkDestroyImageView(device, swapchain_views[i], NULL);
-    }
+    vkDestroyFramebuffer(device, framebuffer, NULL);
+    vkDestroyImage(device, color_image, NULL);
+    vkDestroyImageView(device, color_view, NULL);
+    vkFreeMemory(device, color_image_memory, NULL);
+
+    vkDestroyBuffer(device, image_buffer, NULL);
+    vkFreeMemory(device, image_buffer_memory, NULL);
 
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
@@ -749,16 +647,8 @@ int main(void) {
     vkDestroyShaderModule(device, fragment_shader, NULL);
 
     vkDestroyRenderPass(device, render_pass, NULL);
-    vkDestroySwapchainKHR(device, swapchain, NULL);
-    free(swapchain_images);
-    free(swapchain_views);
-    free(framebuffers);
-    vkDestroySurfaceKHR(instance, surface, NULL);
-    vkDestroySemaphore(device, image_acquire_sem, NULL);
-    vkDestroySemaphore(device, render_sem, NULL);
     vkFreeCommandBuffers(device, cmd_pool, 1, &setup_buffer);
-    vkFreeCommandBuffers(device, cmd_pool, nswapchain_images, draw_buffers);
-    free(draw_buffers);
+    vkFreeCommandBuffers(device, cmd_pool, 1, &draw_buffer);
     vkDestroyCommandPool(device, cmd_pool, NULL);
     vkDestroyDevice(device, NULL);
     {
@@ -768,8 +658,5 @@ int main(void) {
         destroyDebugReportCallback(instance, debug_callback, NULL);
     }
     vkDestroyInstance(instance, NULL);
-    xcb_unmap_window(xcb_conn, window);
-    xcb_destroy_window(xcb_conn, window);
-    xcb_disconnect(xcb_conn);
     return 0;
 }

@@ -1,3 +1,4 @@
 *.o
 *.spv
+*.tif
 rasterize
