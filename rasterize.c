@@ -11,8 +11,8 @@
 #define NELEMS(x) (sizeof(x) / sizeof(*x))
 
 const VkExtent2D render_size = {
-    .width = 640,
-    .height = 480,
+    .width = 1920,
+    .height = 1440,
 };
 const size_t nchannels = 4;
 

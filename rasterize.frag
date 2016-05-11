@@ -18,6 +18,6 @@ void main() {
          float new_d = dot(screen_pos - lines[i][0], normal);
          d = max(d, new_d);
      }
-     d = d * 2;
+     d = d * 3;
      out_color = vec4(-min(d, 0.0), 0.0, max(d, 0.0), 1.0);
 }
