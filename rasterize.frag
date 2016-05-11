@@ -6,10 +6,8 @@ layout (location = 0) in vec2 screen_pos;
 
 layout (location = 0) out vec4 out_color;
 
-vec2 lines[3][2] = {
-     {vec2( 0.0, 0.5), vec2(-0.5,-0.5)},
-     {vec2(-0.5,-0.5), vec2( 0.5,-0.5)},
-     {vec2( 0.5,-0.5), vec2( 0.0, 0.5)},
+layout (set = 0, binding = 0) uniform Lines {
+	vec2 lines[3][2];
 };
 
 void main() {

@@ -16,6 +16,16 @@ const VkExtent2D render_size = {
 };
 const size_t nchannels = 4;
 
+struct Vertex {
+    float pos[2] __attribute__((aligned(16)));
+};
+
+const struct Vertex lines[3][2] = {
+    {{.pos={ 0.0,-0.5}}, {.pos={ 0.5, 0.5}}},
+    {{.pos={ 0.5, 0.5}}, {.pos={-0.5, 0.5}}},
+    {{.pos={-0.5, 0.5}}, {.pos={ 0.0,-0.5}}},
+};
+
 VKAPI_ATTR VkBool32 VKAPI_CALL
 debugReportCallback(VkDebugReportFlagsEXT flags __attribute__((unused)),
                     VkDebugReportObjectTypeEXT objectType __attribute__((unused)),
@@ -159,6 +169,7 @@ void createFramebuffer(VkDevice device, VkExtent2D size,
 
 void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
              VkPipeline pipeline, VkPipelineLayout pipeline_layout,
+             VkDescriptorSet descriptor_set,
              VkRenderPass render_pass, VkFramebuffer framebuffer){
     VkClearValue clear_values[1] = {{
             .color.float32 = {0.1, 0.1, 0.1, 1.0},
@@ -177,6 +188,8 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
     };
     vkCmdBeginRenderPass(draw_buffer, &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vkCmdBindDescriptorSets(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
+                            0, 1, &descriptor_set, 0, NULL);
 
     VkRect2D scissor= {
         .offset = {.x = 0, .y = 0,},
@@ -341,6 +354,45 @@ int main(void) {
                      VK_IMAGE_ASPECT_COLOR_BIT,
                      &color_image, &color_image_memory, &color_view);
 
+    VkBuffer lines_buffer;
+    VkDeviceMemory lines_memory;
+    {
+        VkBufferCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .size = sizeof(lines),
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        };
+        assert(vkCreateBuffer(device, &create_info, NULL, &lines_buffer) == VK_SUCCESS);
+        VkMemoryRequirements memory_requirements;
+        vkGetBufferMemoryRequirements(device, lines_buffer, &memory_requirements);
+
+        VkMemoryAllocateInfo allocate_info = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = NULL,
+            .allocationSize = memory_requirements.size,
+            // VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISISBLE_BIT
+            // TODO: Use staging buffer
+            .memoryTypeIndex = 0,
+        };
+        assert(vkAllocateMemory(device, &allocate_info, NULL, &lines_memory) == VK_SUCCESS);
+        assert(vkBindBufferMemory(device, lines_buffer, lines_memory, 0) == VK_SUCCESS);
+
+        void * data;
+        assert(vkMapMemory(device, lines_memory, 0, VK_WHOLE_SIZE, 0, &data) == VK_SUCCESS);
+        memcpy(data, lines, sizeof(lines));
+        VkMappedMemoryRange flush_range = {
+            .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .pNext = NULL,
+            .memory = lines_memory,
+            .offset = 0,
+            .size = VK_WHOLE_SIZE,
+        };
+        assert(vkFlushMappedMemoryRanges(device, 1, &flush_range) == VK_SUCCESS);
+        vkUnmapMemory(device, lines_memory);
+    }
+
     VkBuffer image_buffer;
     VkDeviceMemory image_buffer_memory;
     {
@@ -395,14 +447,81 @@ int main(void) {
         free(code[1]);
     }
 
+    VkDescriptorSetLayout descriptor_set_layout;
+    {
+        VkDescriptorSetLayoutBinding bindings[1] = {{
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers = NULL,
+            }};
+
+        VkDescriptorSetLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .bindingCount = NELEMS(bindings),
+            .pBindings = bindings,
+        };
+
+        assert(vkCreateDescriptorSetLayout(device, &create_info, NULL, &descriptor_set_layout) == VK_SUCCESS);
+    }
+
+    VkDescriptorPool descriptor_pool;
+    {
+        VkDescriptorPoolSize pool_sizes[1] = {{
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            }};
+        VkDescriptorPoolCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .maxSets = 1,
+            .poolSizeCount = NELEMS(pool_sizes),
+            .pPoolSizes = pool_sizes,
+        };
+        assert(vkCreateDescriptorPool(device, &create_info, NULL, &descriptor_pool) == VK_SUCCESS);
+    }
+
+    VkDescriptorSet descriptor_set;
+    {
+        VkDescriptorSetAllocateInfo allocate_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .pNext = NULL,
+            .descriptorPool = descriptor_pool,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &descriptor_set_layout,
+        };
+        assert(vkAllocateDescriptorSets(device, &allocate_info, &descriptor_set) == VK_SUCCESS);
+
+        VkDescriptorBufferInfo buffer_info = {
+            .buffer = lines_buffer,
+            .offset = 0,
+            .range = VK_WHOLE_SIZE,
+        };
+        VkWriteDescriptorSet writes[1] = {{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext = NULL,
+                .dstSet = descriptor_set,
+                .dstBinding = 0,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .pBufferInfo = &buffer_info,
+            }};
+        vkUpdateDescriptorSets(device, 1, writes, 0, NULL);
+    }
+
     VkPipelineLayout pipeline_layout;
     {
         VkPipelineLayoutCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .setLayoutCount = 0,
-            .pSetLayouts = NULL,
+            .setLayoutCount = 1,
+            .pSetLayouts = &descriptor_set_layout,
             .pushConstantRangeCount = 0,
             .pPushConstantRanges = NULL,
         };
@@ -505,6 +624,7 @@ int main(void) {
             .blendConstants = {},
         };
 
+        // TODO: Make static
         VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
         VkPipelineDynamicStateCreateInfo dynamic_state = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
@@ -587,7 +707,7 @@ int main(void) {
             .pInheritanceInfo = NULL,
         };
         assert(vkBeginCommandBuffer(draw_buffer, &begin_info) == VK_SUCCESS);
-        cmdDraw(draw_buffer, render_size, pipeline, pipeline_layout, render_pass, framebuffer);
+        cmdDraw(draw_buffer, render_size, pipeline, pipeline_layout, descriptor_set, render_pass, framebuffer);
 
         VkImageMemoryBarrier draw_barrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -686,10 +806,16 @@ int main(void) {
     vkDestroyBuffer(device, image_buffer, NULL);
     vkFreeMemory(device, image_buffer_memory, NULL);
 
+    vkDestroyBuffer(device, lines_buffer, NULL);
+    vkFreeMemory(device, lines_memory, NULL);
+
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
     vkDestroyShaderModule(device, vertex_shader, NULL);
     vkDestroyShaderModule(device, fragment_shader, NULL);
+
+    vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
+    vkDestroyDescriptorPool(device, descriptor_pool, NULL);
 
     vkDestroyRenderPass(device, render_pass, NULL);
     vkFreeCommandBuffers(device, cmd_pool, 1, &setup_buffer);
