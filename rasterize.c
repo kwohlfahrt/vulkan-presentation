@@ -16,9 +16,14 @@ const VkExtent2D render_size = {
 };
 const size_t nchannels = 4;
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType,
-                                                   uint64_t object, size_t location, int32_t messageCode,
-                                                   const char* pLayerPrefix, const char* pMessage, void* pUserData){
+VKAPI_ATTR VkBool32 VKAPI_CALL
+debugReportCallback(VkDebugReportFlagsEXT flags __attribute__((unused)),
+                    VkDebugReportObjectTypeEXT objectType __attribute__((unused)),
+                    uint64_t __attribute__((unused)) object,
+                    size_t __attribute__((unused)) location,
+                    int32_t __attribute__((unused)) messageCode,
+                    const __attribute__((unused)) char* pLayerPrefix,
+                    const char* pMessage, void* __attribute__((unused)) pUserData){
     fprintf(stdout, "%s\n", pMessage);
     return VK_FALSE;
 }
@@ -158,13 +163,6 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
     VkClearValue clear_values[1] = {{
             .color.float32 = {0.1, 0.1, 0.1, 1.0},
         }};
-    VkImageSubresourceRange clear_ranges[1] = {{
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        }};
     VkRenderPassBeginInfo renderpass_begin_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .pNext = NULL,
@@ -177,8 +175,7 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
         .clearValueCount = NELEMS(clear_values),
         .pClearValues = clear_values,
     };
-    VkSubpassContents subpass_contents[1] = {VK_SUBPASS_CONTENTS_INLINE,};
-    vkCmdBeginRenderPass(draw_buffer, &renderpass_begin_info, subpass_contents[0]);
+    vkCmdBeginRenderPass(draw_buffer, &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
     VkRect2D scissor= {
