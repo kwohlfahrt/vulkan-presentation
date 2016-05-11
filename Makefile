@@ -1,4 +1,4 @@
-OBJECTS = info.o tiff.o
+OBJECTS = info.o tiff.o util.o
 
 rasterize : rasterize.c $(OBJECTS)
 	$(CC) -std=gnu11 $< $(OBJECTS) -lvulkan -ltiff -o $@ -g

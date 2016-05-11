@@ -1,9 +1,7 @@
+#include "util.h"
 #include "tiff.h"
 
 #include <stdlib.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 #include <vulkan/vulkan.h>
@@ -25,46 +23,6 @@ const struct Vertex lines[3][2] = {
     {{.pos={ 0.5, 0.5}}, {.pos={-0.5, 0.5}}},
     {{.pos={-0.5, 0.5}}, {.pos={ 0.0,-0.5}}},
 };
-
-VKAPI_ATTR VkBool32 VKAPI_CALL
-debugReportCallback(VkDebugReportFlagsEXT flags __attribute__((unused)),
-                    VkDebugReportObjectTypeEXT objectType __attribute__((unused)),
-                    uint64_t __attribute__((unused)) object,
-                    size_t __attribute__((unused)) location,
-                    int32_t __attribute__((unused)) messageCode,
-                    const __attribute__((unused)) char* pLayerPrefix,
-                    const char* pMessage, void* __attribute__((unused)) pUserData){
-    fprintf(stdout, "%s\n", pMessage);
-    return VK_FALSE;
-}
-
-size_t loadModule(char * filename, uint32_t ** data) {
-    FILE * file;
-    size_t size;
-    *data = NULL;
-
-    file = fopen(filename, "rb");
-    if (file == NULL)
-        return 0;
-
-    fseek(file, 0, SEEK_END);
-    size = ftell(file);
-    rewind(file);
-    *data = malloc(size);
-
-    if (data == NULL)
-        goto cleanup;
-
-    if (fread(*data, 1, size, file) != size)
-        goto cleanup;
-
-    return size;
-
- cleanup:
-    fclose(file);
-    free(*data);
-    return 0;
-}
 
 void createFrameImage(VkDevice device, VkExtent2D size,
                       VkFormat format, VkSampleCountFlagBits samples,
