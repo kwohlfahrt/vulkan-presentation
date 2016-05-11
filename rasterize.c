@@ -381,28 +381,23 @@ int main(void) {
 
     VkShaderModule vertex_shader, fragment_shader;
     {
-        size_t code_sizes[2];
-        uint32_t * code[2];
-        assert((code_sizes[0] = loadModule("rasterize.vert.spv", &code[0])) != 0);
-        assert((code_sizes[1] = loadModule("rasterize.frag.spv", &code[1])) != 0);
+        char* filenames[] = {"rasterize.vert.spv", "rasterize.frag.spv"};
+        VkShaderModule * modules[NELEMS(filenames)] = {&vertex_shader, &fragment_shader};
+        for (size_t i = 0; i < NELEMS(filenames); i++){
+            size_t code_size;
+            uint32_t * code;
+            assert((code_size = loadModule(filenames[i], &code)) != 0);
 
-        VkShaderModuleCreateInfo create_info[2] = {{
+            VkShaderModuleCreateInfo create_info = {
                 .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
                 .pNext = NULL,
                 .flags = 0,
-                .codeSize = code_sizes[0],
-                .pCode = code[0],
-            }, {
-                .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-                .pNext = NULL,
-                .flags = 0,
-                .codeSize = code_sizes[1],
-                .pCode = code[1],
-            }};
-        assert(vkCreateShaderModule(device, &create_info[0], NULL, &vertex_shader) == VK_SUCCESS);
-        assert(vkCreateShaderModule(device, &create_info[1], NULL, &fragment_shader) == VK_SUCCESS);
-        free(code[0]);
-        free(code[1]);
+                .codeSize = code_size,
+                .pCode = code,
+            };
+            assert(vkCreateShaderModule(device, &create_info, NULL, modules[i]) == VK_SUCCESS);
+            free(code);
+        }
     }
 
     VkDescriptorSetLayout descriptor_set_layout;
