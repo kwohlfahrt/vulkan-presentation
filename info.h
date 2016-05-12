@@ -2,7 +2,5 @@
 
 #include <vulkan/vulkan.h>
 
-void printPhysicalDeviceInfo(VkPhysicalDevice phy_device, VkSurfaceKHR surface);
-void printLayers();
-void printExtensions();
-void printSurfaceCapabilities(VkPhysicalDevice phy_device, VkSurfaceKHR surface);
+void matchingQueues(VkPhysicalDevice const phy_device, VkQueueFlags const flags,
+                    uint32_t * const nmatching_queues, uint32_t * const matching_queues);

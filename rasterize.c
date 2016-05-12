@@ -1,4 +1,5 @@
 #include "util.h"
+#include "info.h"
 #include "tiff.h"
 
 #include <stdlib.h>
@@ -206,21 +207,28 @@ int main(void) {
         const char validation_layer[] = "VK_LAYER_LUNARG_standard_validation";
         const char* layers[] = {validation_layer,};
 
-        VkDeviceQueueCreateInfo queue_info[] = {{
-                .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-                .pNext = NULL,
-                .flags = 0,
-                .queueFamilyIndex = 0,
-                .queueCount = 1,
-                .pQueuePriorities = queue_priorities,
-            }};
+        uint32_t nqueues;
+        matchingQueues(phy_device, VK_QUEUE_GRAPHICS_BIT, &nqueues, NULL);
+        assert(nqueues > 0);
+        uint32_t * queue_family_idxs = malloc(sizeof(*queue_family_idxs) * nqueues);
+        matchingQueues(phy_device, VK_QUEUE_GRAPHICS_BIT, &nqueues, queue_family_idxs);
+
+        VkDeviceQueueCreateInfo queue_info = {
+            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .queueFamilyIndex = queue_family_idxs[0],
+            .queueCount = 1,
+            .pQueuePriorities = queue_priorities,
+        };
+        free(queue_family_idxs);
 
         VkDeviceCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .queueCreateInfoCount = NELEMS(queue_info),
-            .pQueueCreateInfos = queue_info,
+            .queueCreateInfoCount = 1,
+            .pQueueCreateInfos = &queue_info,
             .enabledLayerCount = NELEMS(layers),
             .ppEnabledLayerNames = layers,
             .enabledExtensionCount = 0,
