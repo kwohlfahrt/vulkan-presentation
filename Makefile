@@ -17,7 +17,7 @@ OBJECTS = info.o tiff.o util.o
 	./$<
 
 %.ogg : %.bin %.frag.spv %.vert.spv
-	./$< && ffmpeg -i $(basename $@)%03d.tif -q:v 9 $@
+	./$< && ffmpeg -i $(basename $@)%03d.tif -q:v 9 -y $@
 	rm -f $(basename $@)???.tif
 
 .PHONY : clean
@@ -25,4 +25,4 @@ clean :
 	rm -f *.spv *.o *.tif *.ogg *.bin
 
 .PHONY : all
-all : rasterize.tif device_coords.tif vertex_shader.ogg
+all : rasterize.tif device_coords.tif vertex_shader.ogg fragment_shader.ogg
