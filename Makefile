@@ -1,7 +1,7 @@
 OBJECTS = info.o tiff.o util.o
 
-rasterize : rasterize.c $(OBJECTS)
-	$(CC) -std=gnu11 $< $(OBJECTS) -lvulkan -ltiff -o $@ -g
+%.bin : %.c $(OBJECTS)
+	$(CC) -std=gnu11 $^ -lvulkan -ltiff -o $@ -g
 
 %.o : %.c
 	$(CC) -std=gnu11 -c $< -o $@ -g
@@ -12,10 +12,13 @@ rasterize : rasterize.c $(OBJECTS)
 %.vert.spv : %.vert
 	glslangValidator -V -o $@ $<
 
-.PRECIOUS : %.frag.spv %.vert.spv
-%.tif : % %.frag.spv %.vert.spv
+.PRECIOUS : %.frag.spv %.vert.spv %.bin %.o
+%.tif : %.bin %.frag.spv %.vert.spv
 	./$<
 
 .PHONY : clean
 clean :
-	rm -f *.spv *.o *.tif rasterize
+	rm -f *.spv *.o *.tif *.bin
+
+.PHONY : all
+all : rasterize.tif device_coords.tif

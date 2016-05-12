@@ -19,10 +19,10 @@ struct Vertex {
     float pos[2] __attribute__((aligned(16)));
 };
 
-const struct Vertex lines[3][2] = {
-    {{.pos={ 0.0,-0.5}}, {.pos={ 0.5, 0.5}}},
-    {{.pos={ 0.5, 0.5}}, {.pos={-0.5, 0.5}}},
-    {{.pos={-0.5, 0.5}}, {.pos={ 0.0,-0.5}}},
+const struct Vertex verts[3] = {
+    {.pos={ 0.0,-0.5}},
+    {.pos={ 0.5, 0.5}},
+    {.pos={-0.5, 0.5}},
 };
 
 void createFrameImage(VkDevice device, VkExtent2D size,
@@ -127,8 +127,7 @@ void createFramebuffer(VkDevice device, VkExtent2D size,
 }
 
 void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
-             VkPipeline pipeline, VkPipelineLayout pipeline_layout,
-             VkDescriptorSet descriptor_set,
+             VkPipeline pipeline, VkBuffer vertex_buffer,
              VkRenderPass render_pass, VkFramebuffer framebuffer){
     VkClearValue clear_values[1] = {{
             .color.float32 = {0.1, 0.1, 0.1, 1.0},
@@ -147,9 +146,9 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
     };
     vkCmdBeginRenderPass(draw_buffer, &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    vkCmdBindDescriptorSets(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-                            0, 1, &descriptor_set, 0, NULL);
-    vkCmdDraw(draw_buffer, 4, 1, 0, 0);
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(draw_buffer, 0, 1, &vertex_buffer, &offset);
+    vkCmdDraw(draw_buffer, 3, 1, 0, 0);
     vkCmdEndRenderPass(draw_buffer);
 }
 
@@ -304,20 +303,20 @@ int main(void) {
                      VK_IMAGE_ASPECT_COLOR_BIT,
                      &color_image, &color_image_memory, &color_view);
 
-    VkBuffer lines_buffer;
-    VkDeviceMemory lines_memory;
+    VkBuffer verts_buffer;
+    VkDeviceMemory verts_memory;
     {
         VkBufferCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .size = sizeof(lines),
+            .size = sizeof(verts),
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         };
-        assert(vkCreateBuffer(device, &create_info, NULL, &lines_buffer) == VK_SUCCESS);
+        assert(vkCreateBuffer(device, &create_info, NULL, &verts_buffer) == VK_SUCCESS);
         VkMemoryRequirements memory_requirements;
-        vkGetBufferMemoryRequirements(device, lines_buffer, &memory_requirements);
+        vkGetBufferMemoryRequirements(device, verts_buffer, &memory_requirements);
 
         VkMemoryAllocateInfo allocate_info = {
             .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -327,20 +326,20 @@ int main(void) {
             // TODO: Use staging buffer
             .memoryTypeIndex = 0,
         };
-        assert(vkAllocateMemory(device, &allocate_info, NULL, &lines_memory) == VK_SUCCESS);
-        assert(vkBindBufferMemory(device, lines_buffer, lines_memory, 0) == VK_SUCCESS);
+        assert(vkAllocateMemory(device, &allocate_info, NULL, &verts_memory) == VK_SUCCESS);
+        assert(vkBindBufferMemory(device, verts_buffer, verts_memory, 0) == VK_SUCCESS);
 
         void * data;
-        assert(vkMapMemory(device, lines_memory, 0, VK_WHOLE_SIZE, 0, &data) == VK_SUCCESS);
-        memcpy(data, lines, sizeof(lines));
+        assert(vkMapMemory(device, verts_memory, 0, VK_WHOLE_SIZE, 0, &data) == VK_SUCCESS);
+        memcpy(data, verts, sizeof(verts));
         VkMappedMemoryRange flush_range = {
             .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .pNext = NULL,
-            .memory = lines_memory,
+            .memory = verts_memory,
             .offset = 0,
             .size = VK_WHOLE_SIZE,
         };
         assert(vkFlushMappedMemoryRanges(device, 1, &flush_range) == VK_SUCCESS);
-        vkUnmapMemory(device, lines_memory);
+        vkUnmapMemory(device, verts_memory);
     }
 
     VkBuffer image_buffer;
@@ -373,7 +372,7 @@ int main(void) {
 
     VkShaderModule vertex_shader, fragment_shader;
     {
-        char* filenames[] = {"rasterize.vert.spv", "rasterize.frag.spv"};
+        char* filenames[] = {"device_coords.vert.spv", "device_coords.frag.spv"};
         VkShaderModule * modules[NELEMS(filenames)] = {&vertex_shader, &fragment_shader};
         for (size_t i = 0; i < NELEMS(filenames); i++){
             size_t code_size;
@@ -392,81 +391,14 @@ int main(void) {
         }
     }
 
-    VkDescriptorSetLayout descriptor_set_layout;
-    {
-        VkDescriptorSetLayoutBinding bindings[1] = {{
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .pImmutableSamplers = NULL,
-            }};
-
-        VkDescriptorSetLayoutCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .bindingCount = NELEMS(bindings),
-            .pBindings = bindings,
-        };
-
-        assert(vkCreateDescriptorSetLayout(device, &create_info, NULL, &descriptor_set_layout) == VK_SUCCESS);
-    }
-
-    VkDescriptorPool descriptor_pool;
-    {
-        VkDescriptorPoolSize pool_sizes[1] = {{
-            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
-            }};
-        VkDescriptorPoolCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .maxSets = 1,
-            .poolSizeCount = NELEMS(pool_sizes),
-            .pPoolSizes = pool_sizes,
-        };
-        assert(vkCreateDescriptorPool(device, &create_info, NULL, &descriptor_pool) == VK_SUCCESS);
-    }
-
-    VkDescriptorSet descriptor_set;
-    {
-        VkDescriptorSetAllocateInfo allocate_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .pNext = NULL,
-            .descriptorPool = descriptor_pool,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &descriptor_set_layout,
-        };
-        assert(vkAllocateDescriptorSets(device, &allocate_info, &descriptor_set) == VK_SUCCESS);
-
-        VkDescriptorBufferInfo buffer_info = {
-            .buffer = lines_buffer,
-            .offset = 0,
-            .range = VK_WHOLE_SIZE,
-        };
-        VkWriteDescriptorSet writes[1] = {{
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext = NULL,
-                .dstSet = descriptor_set,
-                .dstBinding = 0,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo = &buffer_info,
-            }};
-        vkUpdateDescriptorSets(device, 1, writes, 0, NULL);
-    }
-
     VkPipelineLayout pipeline_layout;
     {
         VkPipelineLayoutCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .setLayoutCount = 1,
-            .pSetLayouts = &descriptor_set_layout,
+            .setLayoutCount = 0,
+            .pSetLayouts = NULL,
             .pushConstantRangeCount = 0,
             .pPushConstantRanges = NULL,
         };
@@ -492,20 +424,31 @@ int main(void) {
                 .pName = "main",
                 .pSpecializationInfo = NULL,
             }};
+        VkVertexInputBindingDescription vtx_binding = {
+            .binding = 0,
+            .stride = sizeof(struct Vertex),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        };
+        VkVertexInputAttributeDescription vtx_attr = {
+            .location = 0,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32_SFLOAT,
+            .offset = offsetof(struct Vertex, pos),
+        };
         VkPipelineVertexInputStateCreateInfo vtx_state = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .vertexBindingDescriptionCount = 0,
-            .pVertexBindingDescriptions = NULL,
-            .vertexAttributeDescriptionCount = 0,
-            .pVertexAttributeDescriptions = NULL,
+            .vertexBindingDescriptionCount = 1,
+            .pVertexBindingDescriptions = &vtx_binding,
+            .vertexAttributeDescriptionCount = 1,
+            .pVertexAttributeDescriptions = &vtx_attr,
         };
         VkPipelineInputAssemblyStateCreateInfo ia_state = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+            .topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
             .primitiveRestartEnable = VK_FALSE,
         };
         VkViewport viewport = {
@@ -535,7 +478,7 @@ int main(void) {
             .flags = 0,
             .depthClampEnable = VK_FALSE,
             .rasterizerDiscardEnable = VK_FALSE,
-            .polygonMode = VK_POLYGON_MODE_FILL,
+            .polygonMode = VK_POLYGON_MODE_POINT,
             .cullMode = VK_CULL_MODE_NONE,
             .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
             .depthBiasEnable = VK_FALSE,
@@ -654,7 +597,7 @@ int main(void) {
             .pInheritanceInfo = NULL,
         };
         assert(vkBeginCommandBuffer(draw_buffer, &begin_info) == VK_SUCCESS);
-        cmdDraw(draw_buffer, render_size, pipeline, pipeline_layout, descriptor_set, render_pass, framebuffer);
+        cmdDraw(draw_buffer, render_size, pipeline, verts_buffer, render_pass, framebuffer);
 
         VkImageMemoryBarrier draw_barrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -738,7 +681,7 @@ int main(void) {
             .size = VK_WHOLE_SIZE,
         };
         assert(vkInvalidateMappedMemoryRanges(device, 1, &flush_range) == VK_SUCCESS);
-        assert(writeTiff("rasterize.tif", image_data, render_size, nchannels) == 0);
+        assert(writeTiff("device_coords.tif", image_data, render_size, nchannels) == 0);
         vkUnmapMemory(device, image_buffer_memory);
     }
 
@@ -753,16 +696,13 @@ int main(void) {
     vkDestroyBuffer(device, image_buffer, NULL);
     vkFreeMemory(device, image_buffer_memory, NULL);
 
-    vkDestroyBuffer(device, lines_buffer, NULL);
-    vkFreeMemory(device, lines_memory, NULL);
+    vkDestroyBuffer(device, verts_buffer, NULL);
+    vkFreeMemory(device, verts_memory, NULL);
 
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
     vkDestroyShaderModule(device, vertex_shader, NULL);
     vkDestroyShaderModule(device, fragment_shader, NULL);
-
-    vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
-    vkDestroyDescriptorPool(device, descriptor_pool, NULL);
 
     vkDestroyRenderPass(device, render_pass, NULL);
     vkFreeCommandBuffers(device, cmd_pool, 1, &setup_buffer);
