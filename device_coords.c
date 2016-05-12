@@ -130,7 +130,7 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
              VkPipeline pipeline, VkBuffer vertex_buffer,
              VkRenderPass render_pass, VkFramebuffer framebuffer){
     VkClearValue clear_values[1] = {{
-            .color.float32 = {0.1, 0.1, 0.1, 1.0},
+            .color.float32 = {0.0, 0.0, 0.0, 1.0},
         }};
     VkRenderPassBeginInfo renderpass_begin_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
