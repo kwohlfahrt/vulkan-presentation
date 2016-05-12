@@ -148,22 +148,6 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
     vkCmdBindPipeline(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     vkCmdBindDescriptorSets(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
                             0, 1, &descriptor_set, 0, NULL);
-
-    VkRect2D scissor= {
-        .offset = {.x = 0, .y = 0,},
-        .extent = size,
-    };
-    vkCmdSetScissor(draw_buffer, 0, 1, &scissor);
-    VkViewport viewport = {
-        .x = 0,
-        .y = 0,
-        .width = size.width,
-        .height = size.height,
-        .minDepth = 0.0,
-        .maxDepth = 1.0,
-    };
-    vkCmdSetViewport(draw_buffer, 0, 1, &viewport);
-
     vkCmdDraw(draw_buffer, 4, 1, 0, 1);
     vkCmdEndRenderPass(draw_buffer);
 }
@@ -516,14 +500,26 @@ int main(void) {
             .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
             .primitiveRestartEnable = VK_FALSE,
         };
+        VkViewport viewport = {
+            .x = 0,
+            .y = 0,
+            .width = render_size.width,
+            .height = render_size.height,
+            .minDepth = 0.0,
+            .maxDepth = 1.0,
+        };
+        VkRect2D scissor= {
+            .offset = {.x = 0, .y = 0,},
+            .extent = render_size,
+        };
         VkPipelineViewportStateCreateInfo viewport_state = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
             .viewportCount = 1,
-            .pViewports = NULL, // Dynamic
+            .pViewports = &viewport,
             .scissorCount = 1,
-            .pScissors = NULL, // Dynamic
+            .pScissors = &scissor,
         };
         VkPipelineRasterizationStateCreateInfo rasterization_state = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -577,16 +573,6 @@ int main(void) {
             .blendConstants = {},
         };
 
-        // TODO: Make static
-        VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-        VkPipelineDynamicStateCreateInfo dynamic_state = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .dynamicStateCount = NELEMS(dynamic_states),
-            .pDynamicStates = dynamic_states,
-        };
-
         VkGraphicsPipelineCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
             .pNext = NULL,
@@ -601,7 +587,7 @@ int main(void) {
             .pMultisampleState = &multisample_state,
             .pDepthStencilState = &depth_stencil_state,
             .pColorBlendState = &color_blend_state,
-            .pDynamicState = &dynamic_state,
+            .pDynamicState = NULL,
             .layout = pipeline_layout,
             .renderPass = render_pass,
             .subpass = 0,
