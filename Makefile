@@ -21,4 +21,4 @@ clean :
 	rm -f *.spv *.o *.tif *.bin
 
 .PHONY : all
-all : rasterize.tif device_coords.tif vertex_shader.tif fragment_shader.tif
+all : rasterize.tif device_coords.tif vertex_shader.tif fill.tif

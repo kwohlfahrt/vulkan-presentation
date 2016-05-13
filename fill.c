@@ -48,7 +48,7 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
     vkCmdBindPipeline(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     VkDeviceSize offset = 0;
     vkCmdBindVertexBuffers(draw_buffer, 0, 1, &vertex_buffer, &offset);
-    vkCmdDraw(draw_buffer, 3, 4, 0, 0);
+    vkCmdDraw(draw_buffer, 3, 1, 0, 0);
     vkCmdEndRenderPass(draw_buffer);
 }
 
@@ -272,7 +272,7 @@ int main(void) {
 
     VkShaderModule vertex_shader, fragment_shader;
     {
-        char* filenames[] = {"fragment_shader.vert.spv", "fragment_shader.frag.spv"};
+        char* filenames[] = {"fill.vert.spv", "fill.frag.spv"};
         VkShaderModule * modules[NELEMS(filenames)] = {&vertex_shader, &fragment_shader};
         for (size_t i = 0; i < NELEMS(filenames); i++){
             size_t code_size;
@@ -582,7 +582,7 @@ int main(void) {
         assert(vkQueueSubmit(queue, 1, &submit_info, fence) == VK_SUCCESS);
         assert(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS);
         assert(vkInvalidateMappedMemoryRanges(device, 1, &image_flush) == VK_SUCCESS);
-        assert(writeTiff("fragment_shader.tif", image_data, render_size, nchannels) == 0);
+        assert(writeTiff("fill.tif", image_data, render_size, nchannels) == 0);
 
         vkUnmapMemory(device, image_buffer_memory);
     }
