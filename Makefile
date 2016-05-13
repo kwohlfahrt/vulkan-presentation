@@ -1,4 +1,4 @@
-OBJECTS = info.o tiff.o util.o
+OBJECTS = info.o tiff.o util.o vkutil.o
 
 %.bin : %.c $(OBJECTS)
 	$(CC) -std=gnu11 $^ -lvulkan -ltiff -o $@ -g
