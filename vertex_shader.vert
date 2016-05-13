@@ -1,16 +1,19 @@
 #version 450
 #extension KHR_vulkan_glsl : enable
 
-#define M_PI 3.1415926535897932384626433832795
-
 layout (location = 0) in vec2 screen_pos;
 
-layout (set = 0, binding = 0) uniform Data {
-       float time;
-};
+layout (location = 0) out vec4 pos;
+layout (location = 1) out vec4 color;
 
 void main() {
-	gl_Position = vec4(screen_pos, 0.0, 1.0);
-  gl_Position.x += sin(time * 2 * M_PI);
+  color = vec4((gl_VertexIndex + 0) % 3 == 0,
+               (gl_VertexIndex + 1) % 3 == 0,
+               (gl_VertexIndex + 2) % 3 == 0,
+               1.0);
 	gl_PointSize = 5.0;
+	gl_Position = vec4(screen_pos, 0.0, 1.0);
+  gl_Position.x += float(gl_InstanceIndex) / 10.0;
+  gl_Position.z += float(gl_InstanceIndex) / 5.0;
+  pos = gl_Position;
 }

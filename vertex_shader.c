@@ -3,7 +3,6 @@
 #include "info.h"
 #include "tiff.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -21,22 +20,14 @@ struct Vertex {
     float pos[2] __attribute__((aligned(16)));
 };
 
-struct UniformData {
-    float time;
-};
-
 const struct Vertex verts[3] = {
     {.pos={ 0.0,-0.5}},
     {.pos={ 0.5, 0.5}},
     {.pos={-0.5, 0.5}},
 };
 
-char filename[] = "vertex_shader000.tif";
-size_t filename_len = 21;
-
 void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
-             VkPipeline pipeline, VkPipelineLayout pipeline_layout,
-             VkDescriptorSet descriptor_set, VkBuffer vertex_buffer,
+             VkPipeline pipeline, VkBuffer vertex_buffer,
              VkRenderPass render_pass, VkFramebuffer framebuffer){
     VkClearValue clear_values[1] = {{
             .color.float32 = {0.0, 0.0, 0.0, 1.0},
@@ -55,11 +46,9 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
     };
     vkCmdBeginRenderPass(draw_buffer, &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    vkCmdBindDescriptorSets(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-                            0, 1, &descriptor_set, 0, NULL);
     VkDeviceSize offset = 0;
     vkCmdBindVertexBuffers(draw_buffer, 0, 1, &vertex_buffer, &offset);
-    vkCmdDraw(draw_buffer, 3, 1, 0, 0);
+    vkCmdDraw(draw_buffer, 3, 4, 0, 0);
     vkCmdEndRenderPass(draw_buffer);
 }
 
@@ -253,33 +242,6 @@ int main(void) {
         vkUnmapMemory(device, verts_memory);
     }
 
-    VkBuffer uniform_buffer;
-    VkDeviceMemory uniform_memory;
-    {
-        VkBufferCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .size = sizeof(struct UniformData),
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        };
-        assert(vkCreateBuffer(device, &create_info, NULL, &uniform_buffer) == VK_SUCCESS);
-        VkMemoryRequirements memory_requirements;
-        vkGetBufferMemoryRequirements(device, uniform_buffer, &memory_requirements);
-
-        VkMemoryAllocateInfo allocate_info = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .pNext = NULL,
-            .allocationSize = memory_requirements.size,
-            // VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISISBLE_BIT
-            // TODO: Use staging buffer
-            .memoryTypeIndex = 0,
-        };
-        assert(vkAllocateMemory(device, &allocate_info, NULL, &uniform_memory) == VK_SUCCESS);
-        assert(vkBindBufferMemory(device, uniform_buffer, uniform_memory, 0) == VK_SUCCESS);
-    }
-
     VkBuffer image_buffer;
     VkDeviceMemory image_buffer_memory;
     {
@@ -329,81 +291,14 @@ int main(void) {
         }
     }
 
-    VkDescriptorSetLayout descriptor_set_layout;
-    {
-        VkDescriptorSetLayoutBinding bindings[1] = {{
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-            .pImmutableSamplers = NULL,
-            }};
-
-        VkDescriptorSetLayoutCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .bindingCount = NELEMS(bindings),
-            .pBindings = bindings,
-        };
-
-        assert(vkCreateDescriptorSetLayout(device, &create_info, NULL, &descriptor_set_layout) == VK_SUCCESS);
-    }
-
-    VkDescriptorPool descriptor_pool;
-    {
-        VkDescriptorPoolSize pool_sizes[1] = {{
-            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
-            }};
-        VkDescriptorPoolCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .maxSets = 1,
-            .poolSizeCount = NELEMS(pool_sizes),
-            .pPoolSizes = pool_sizes,
-        };
-        assert(vkCreateDescriptorPool(device, &create_info, NULL, &descriptor_pool) == VK_SUCCESS);
-    }
-
-    VkDescriptorSet descriptor_set;
-    {
-        VkDescriptorSetAllocateInfo allocate_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .pNext = NULL,
-            .descriptorPool = descriptor_pool,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &descriptor_set_layout,
-        };
-        assert(vkAllocateDescriptorSets(device, &allocate_info, &descriptor_set) == VK_SUCCESS);
-
-        VkDescriptorBufferInfo buffer_info = {
-            .buffer = uniform_buffer,
-            .offset = 0,
-            .range = VK_WHOLE_SIZE,
-        };
-        VkWriteDescriptorSet writes[1] = {{
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext = NULL,
-                .dstSet = descriptor_set,
-                .dstBinding = 0,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo = &buffer_info,
-            }};
-        vkUpdateDescriptorSets(device, 1, writes, 0, NULL);
-    }
-
     VkPipelineLayout pipeline_layout;
     {
         VkPipelineLayoutCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .setLayoutCount = 1,
-            .pSetLayouts = &descriptor_set_layout,
+            .setLayoutCount = 0,
+            .pSetLayouts = NULL,
             .pushConstantRangeCount = 0,
             .pPushConstantRanges = NULL,
         };
@@ -602,7 +497,7 @@ int main(void) {
             .pInheritanceInfo = NULL,
         };
         assert(vkBeginCommandBuffer(draw_buffer, &begin_info) == VK_SUCCESS);
-        cmdDraw(draw_buffer, render_size, pipeline, pipeline_layout, descriptor_set, verts_buffer, render_pass, framebuffer);
+        cmdDraw(draw_buffer, render_size, pipeline, verts_buffer, render_pass, framebuffer);
 
         VkImageMemoryBarrier draw_barrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -662,16 +557,6 @@ int main(void) {
     // Wait for set-up to finish
     assert(vkQueueWaitIdle(queue) == VK_SUCCESS);
     {
-        void * uniform_data;
-        assert(vkMapMemory(device, uniform_memory, 0, VK_WHOLE_SIZE, 0, &uniform_data) == VK_SUCCESS);
-        struct UniformData* uniform = uniform_data;
-        VkMappedMemoryRange uniform_flush = {
-            .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .pNext = NULL,
-            .memory = uniform_memory,
-            .offset = 0,
-            .size = VK_WHOLE_SIZE,
-        };
-
         char * image_data;
         assert(vkMapMemory(device, image_buffer_memory, 0, VK_WHOLE_SIZE, 0, (void **) &image_data) == VK_SUCCESS);
         VkMappedMemoryRange image_flush = {
@@ -693,21 +578,13 @@ int main(void) {
             .pSignalSemaphores = NULL,
         };
 
-
-        for (size_t i = 0; i < 50; i++) {
-            uniform->time = ((float) i) / 50.0;
-            snprintf(filename, filename_len, "vertex_shader%03zu.tif", i);
-
-            assert(vkFlushMappedMemoryRanges(device, 1, &uniform_flush) == VK_SUCCESS);
-            assert(vkResetFences(device, 1, &fence) == VK_SUCCESS);
-            assert(vkQueueSubmit(queue, 1, &submit_info, fence) == VK_SUCCESS);
-            assert(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS);
-            assert(vkInvalidateMappedMemoryRanges(device, 1, &image_flush) == VK_SUCCESS);
-            assert(writeTiff(filename, image_data, render_size, nchannels) == 0);
-        }
+        assert(vkResetFences(device, 1, &fence) == VK_SUCCESS);
+        assert(vkQueueSubmit(queue, 1, &submit_info, fence) == VK_SUCCESS);
+        assert(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS);
+        assert(vkInvalidateMappedMemoryRanges(device, 1, &image_flush) == VK_SUCCESS);
+        assert(writeTiff("vertex_shader.tif", image_data, render_size, nchannels) == 0);
 
         vkUnmapMemory(device, image_buffer_memory);
-        vkUnmapMemory(device, uniform_memory);
     }
 
     assert(vkQueueWaitIdle(queue) == VK_SUCCESS);
@@ -724,16 +601,10 @@ int main(void) {
     vkDestroyBuffer(device, verts_buffer, NULL);
     vkFreeMemory(device, verts_memory, NULL);
 
-    vkDestroyBuffer(device, uniform_buffer, NULL);
-    vkFreeMemory(device, uniform_memory, NULL);
-
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
     vkDestroyShaderModule(device, vertex_shader, NULL);
     vkDestroyShaderModule(device, fragment_shader, NULL);
-
-    vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
-    vkDestroyDescriptorPool(device, descriptor_pool, NULL);
 
     vkDestroyRenderPass(device, render_pass, NULL);
     vkFreeCommandBuffers(device, cmd_pool, 1, &setup_buffer);
