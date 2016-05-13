@@ -356,7 +356,7 @@ int main(void) {
             .y = 0,
             .width = render_size.width,
             .height = render_size.height,
-            .minDepth = -1.0,
+            .minDepth = 0.0,
             .maxDepth = 1.0,
         };
         VkRect2D scissor= {
