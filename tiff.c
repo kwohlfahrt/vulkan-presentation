@@ -28,3 +28,22 @@ int writeTiff(char const * const filename, char const * const data,
     TIFFClose(tif);
     return 0;
 }
+
+int readTiffRGBA(char const * const filename, VkExtent2D * const size, uint32_t * const data) {
+    TIFF * tif = TIFFOpen(filename, "r");
+    if (tif == NULL)
+        return 1;
+
+    if (data == NULL) {
+        TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &size->height);
+        TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &size->width);
+    } else {
+        if (!TIFFReadRGBAImage(tif, size->width, size->height, data, 0)){
+            TIFFClose(tif);
+            return 1;
+        }
+    }
+
+    TIFFClose(tif);
+    return 0;
+}

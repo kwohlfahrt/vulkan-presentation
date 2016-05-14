@@ -1,4 +1,4 @@
 *.o
 *.spv
-*.tif
+/*.tif
 *.bin
