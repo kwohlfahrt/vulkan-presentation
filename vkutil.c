@@ -157,3 +157,27 @@ void createVertexBuffer(VkDevice device, size_t size, const void * data,
     assert(vkFlushMappedMemoryRanges(device, 1, &flush_range) == VK_SUCCESS);
     vkUnmapMemory(device, *memory);
 }
+
+void createRenderBuffer(VkDevice device, VkExtent2D size, size_t nchannels,
+                        VkBuffer * buffer, VkDeviceMemory* memory) {
+        VkBufferCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .size = size.height * size.width * nchannels,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        };
+        assert(vkCreateBuffer(device, &create_info, NULL, buffer) == VK_SUCCESS);
+        VkMemoryRequirements memory_requirements;
+        vkGetBufferMemoryRequirements(device, *buffer, &memory_requirements);
+
+        VkMemoryAllocateInfo allocate_info = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = NULL,
+            .allocationSize = memory_requirements.size,
+            .memoryTypeIndex = 0, //VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+        };
+        assert(vkAllocateMemory(device, &allocate_info, NULL, memory) == VK_SUCCESS);
+        assert(vkBindBufferMemory(device, *buffer, *memory, 0) == VK_SUCCESS);
+}

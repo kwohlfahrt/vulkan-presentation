@@ -21,3 +21,6 @@ void createFramebuffer(VkDevice device, VkExtent2D size,
 
 void createVertexBuffer(VkDevice device, size_t size, const void * data,
                         VkBuffer* buffer, VkDeviceMemory* memory);
+
+void createRenderBuffer(VkDevice device, VkExtent2D size, size_t nchannels,
+                        VkBuffer * buffer, VkDeviceMemory* memory);

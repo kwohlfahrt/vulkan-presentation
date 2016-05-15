@@ -218,28 +218,7 @@ int main(void) {
 
     VkBuffer image_buffer;
     VkDeviceMemory image_buffer_memory;
-    {
-        VkBufferCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .size = render_size.height * render_size.width * nchannels,
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        };
-        assert(vkCreateBuffer(device, &create_info, NULL, &image_buffer) == VK_SUCCESS);
-        VkMemoryRequirements memory_requirements;
-        vkGetBufferMemoryRequirements(device, image_buffer, &memory_requirements);
-
-        VkMemoryAllocateInfo allocate_info = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .pNext = NULL,
-            .allocationSize = memory_requirements.size,
-            .memoryTypeIndex = 0, //VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-        };
-        assert(vkAllocateMemory(device, &allocate_info, NULL, &image_buffer_memory) == VK_SUCCESS);
-        assert(vkBindBufferMemory(device, image_buffer, image_buffer_memory, 0) == VK_SUCCESS);
-    }
+    createRenderBuffer(device, render_size, 4, &image_buffer, &image_buffer_memory);
 
     VkFramebuffer framebuffer;
     createFramebuffer(device, render_size, 1, &color_view, render_pass, &framebuffer);
