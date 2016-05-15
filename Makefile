@@ -12,6 +12,10 @@ OBJECTS = info.o tiff.o util.o vkutil.o
 %.vert.spv : %.vert
 	glslangValidator -V -o $@ $<
 
+BLEND_IMAGES = $(foreach img,no-z-test z-test add,$(subst IMG,$(img),blend_IMG.tif))
+$(BLEND_IMAGES) : blend.bin blend.frag.spv blend.vert.spv
+	./$<
+
 .PRECIOUS : %.frag.spv %.vert.spv %.bin %.o
 %.tif : %.bin %.frag.spv %.vert.spv
 	./$<
@@ -21,4 +25,4 @@ clean :
 	rm -f *.spv *.o *.tif *.bin
 
 .PHONY : all
-all : rasterize.tif device_coords.tif vertex_shader.tif fill.tif texture.tif
+all : rasterize.tif device_coords.tif vertex_shader.tif fill.tif texture.tif $(BLEND_IMAGES)
