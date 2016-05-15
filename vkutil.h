@@ -18,3 +18,6 @@ void cmdPrepareFrameImage(VkCommandBuffer cmd_buffer, VkImage image, VkAccessFla
 void createFramebuffer(VkDevice device, VkExtent2D size,
                        uint32_t nviews, VkImageView* views,
                        VkRenderPass render_pass, VkFramebuffer* framebuffer);
+
+void createVertexBuffer(VkDevice device, size_t size, const void * data,
+                        VkBuffer* buffer, VkDeviceMemory* memory);

@@ -313,42 +313,7 @@ int main(void) {
 
     VkBuffer verts_buffer;
     VkDeviceMemory verts_memory;
-    {
-        VkBufferCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .size = sizeof(verts),
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        };
-        assert(vkCreateBuffer(device, &create_info, NULL, &verts_buffer) == VK_SUCCESS);
-        VkMemoryRequirements memory_requirements;
-        vkGetBufferMemoryRequirements(device, verts_buffer, &memory_requirements);
-
-        VkMemoryAllocateInfo allocate_info = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .pNext = NULL,
-            .allocationSize = memory_requirements.size,
-            // VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISISBLE_BIT
-            // TODO: Use staging buffer
-            .memoryTypeIndex = 0,
-        };
-        assert(vkAllocateMemory(device, &allocate_info, NULL, &verts_memory) == VK_SUCCESS);
-        assert(vkBindBufferMemory(device, verts_buffer, verts_memory, 0) == VK_SUCCESS);
-
-        void * data;
-        assert(vkMapMemory(device, verts_memory, 0, VK_WHOLE_SIZE, 0, &data) == VK_SUCCESS);
-        memcpy(data, verts, sizeof(verts));
-        VkMappedMemoryRange flush_range = {
-            .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .pNext = NULL,
-            .memory = verts_memory,
-            .offset = 0,
-            .size = VK_WHOLE_SIZE,
-        };
-        assert(vkFlushMappedMemoryRanges(device, 1, &flush_range) == VK_SUCCESS);
-        vkUnmapMemory(device, verts_memory);
-    }
+    createVertexBuffer(device, sizeof(verts), verts, &verts_buffer, &verts_memory);
 
     VkBuffer image_buffer;
     VkDeviceMemory image_buffer_memory;
