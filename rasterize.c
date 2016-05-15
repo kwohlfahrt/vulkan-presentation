@@ -164,7 +164,7 @@ int main(void) {
                 .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             }};
         VkAttachmentReference attachment_refs[NELEMS(attachments)] = {{
                 .attachment = 0,
@@ -182,6 +182,15 @@ int main(void) {
                 .preserveAttachmentCount = 0,
                 .pPreserveAttachments = NULL,
             }};
+        VkSubpassDependency dependencies[] = {{
+                .srcSubpass = 0,
+                .dstSubpass = VK_SUBPASS_EXTERNAL,
+                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+                .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+                .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+            }};
         VkRenderPassCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
             .pNext = NULL,
@@ -190,8 +199,8 @@ int main(void) {
             .pAttachments = attachments,
             .subpassCount = NELEMS(subpasses),
             .pSubpasses = subpasses,
-            .dependencyCount = 0,
-            .pDependencies = NULL,
+            .dependencyCount = NELEMS(dependencies),
+            .pDependencies = dependencies,
         };
         assert(vkCreateRenderPass(device, &create_info, NULL, &render_pass) == VK_SUCCESS);
     }
@@ -556,23 +565,6 @@ int main(void) {
         assert(vkBeginCommandBuffer(draw_buffer, &begin_info) == VK_SUCCESS);
         cmdDraw(draw_buffer, render_size, pipeline, pipeline_layout, descriptor_set, render_pass, framebuffer);
 
-        VkImageMemoryBarrier draw_barrier = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .pNext = NULL,
-            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-            .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL ,
-            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            .image = color_image,
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-        };
-        vkCmdPipelineBarrier(draw_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &draw_barrier);
         VkBufferImageCopy copy = {
             .bufferOffset = 0,
             .bufferRowLength = 0, // Tightly packed
