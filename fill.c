@@ -214,11 +214,11 @@ int main(void) {
 
     VkBuffer verts_buffer;
     VkDeviceMemory verts_memory;
-    createVertexBuffer(device, sizeof(verts), verts, &verts_buffer, &verts_memory);
+    createBuffer(device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(verts), verts, &verts_buffer, &verts_memory);
 
     VkBuffer image_buffer;
     VkDeviceMemory image_buffer_memory;
-    createRenderBuffer(device, render_size, 4, &image_buffer, &image_buffer_memory);
+    createBuffer(device, VK_BUFFER_USAGE_TRANSFER_DST_BIT, render_size.height * render_size.width * 4, NULL, &image_buffer, &image_buffer_memory);
 
     VkFramebuffer framebuffer;
     createFramebuffer(device, render_size, 1, &color_view, render_pass, &framebuffer);

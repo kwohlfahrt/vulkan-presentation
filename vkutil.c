@@ -116,16 +116,16 @@ void createFramebuffer(VkDevice device, VkExtent2D size,
     assert(vkCreateFramebuffer(device, &create_info, NULL, framebuffer) == VK_SUCCESS);
 }
 
-void createVertexBuffer(VkDevice device, size_t size, const void * data,
-                        VkBuffer* buffer, VkDeviceMemory* memory) {
-
+void createBuffer(VkDevice device, VkBufferUsageFlags usage,
+                  size_t size, const void * data,
+                  VkBuffer* buffer, VkDeviceMemory* memory) {
     VkBufferCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,
         .size = size,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .usage = usage,
     };
 
     assert(vkCreateBuffer(device, &create_info, NULL, buffer) == VK_SUCCESS);
@@ -137,47 +137,24 @@ void createVertexBuffer(VkDevice device, size_t size, const void * data,
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext = NULL,
         .allocationSize = memory_requirements.size,
-        // VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISISBLE_BIT
-        // TODO: Use staging buffer
+        // VK_MEMORY_PROPERTY_HOST_VISISBLE_BIT
         .memoryTypeIndex = 0,
     };
 
     assert(vkAllocateMemory(device, &allocate_info, NULL, memory) == VK_SUCCESS);
     assert(vkBindBufferMemory(device, *buffer, *memory, 0) == VK_SUCCESS);
 
-    void * buf_data;
-    assert(vkMapMemory(device, *memory, 0, VK_WHOLE_SIZE, 0, &buf_data) == VK_SUCCESS);
-    memcpy(buf_data, data, size);
-    VkMappedMemoryRange flush_range = {
-        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .pNext = NULL,
-        .memory = *memory,
-        .offset = 0,
-        .size = VK_WHOLE_SIZE,
-    };
-    assert(vkFlushMappedMemoryRanges(device, 1, &flush_range) == VK_SUCCESS);
-    vkUnmapMemory(device, *memory);
-}
-
-void createRenderBuffer(VkDevice device, VkExtent2D size, size_t nchannels,
-                        VkBuffer * buffer, VkDeviceMemory* memory) {
-        VkBufferCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .size = size.height * size.width * nchannels,
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    if (data != NULL) {
+        void * buf_data;
+        assert(vkMapMemory(device, *memory, 0, VK_WHOLE_SIZE, 0, &buf_data) == VK_SUCCESS);
+        memcpy(buf_data, data, size);
+        VkMappedMemoryRange flush_range = {
+            .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .pNext = NULL,
+            .memory = *memory,
+            .offset = 0,
+            .size = VK_WHOLE_SIZE,
         };
-        assert(vkCreateBuffer(device, &create_info, NULL, buffer) == VK_SUCCESS);
-        VkMemoryRequirements memory_requirements;
-        vkGetBufferMemoryRequirements(device, *buffer, &memory_requirements);
-
-        VkMemoryAllocateInfo allocate_info = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .pNext = NULL,
-            .allocationSize = memory_requirements.size,
-            .memoryTypeIndex = 0, //VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-        };
-        assert(vkAllocateMemory(device, &allocate_info, NULL, memory) == VK_SUCCESS);
-        assert(vkBindBufferMemory(device, *buffer, *memory, 0) == VK_SUCCESS);
+        assert(vkFlushMappedMemoryRanges(device, 1, &flush_range) == VK_SUCCESS);
+        vkUnmapMemory(device, *memory);
+    }
 }

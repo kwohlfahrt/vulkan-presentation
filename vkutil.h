@@ -19,8 +19,6 @@ void createFramebuffer(VkDevice device, VkExtent2D size,
                        uint32_t nviews, VkImageView* views,
                        VkRenderPass render_pass, VkFramebuffer* framebuffer);
 
-void createVertexBuffer(VkDevice device, size_t size, const void * data,
-                        VkBuffer* buffer, VkDeviceMemory* memory);
-
-void createRenderBuffer(VkDevice device, VkExtent2D size, size_t nchannels,
-                        VkBuffer * buffer, VkDeviceMemory* memory);
+void createBuffer(VkDevice device, VkBufferUsageFlags usage,
+                  size_t size, const void * data,
+                  VkBuffer* buffer, VkDeviceMemory* memory);

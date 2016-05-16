@@ -215,46 +215,11 @@ int main(void) {
 
     VkBuffer lines_buffer;
     VkDeviceMemory lines_memory;
-    {
-        VkBufferCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .size = sizeof(lines),
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        };
-        assert(vkCreateBuffer(device, &create_info, NULL, &lines_buffer) == VK_SUCCESS);
-        VkMemoryRequirements memory_requirements;
-        vkGetBufferMemoryRequirements(device, lines_buffer, &memory_requirements);
-
-        VkMemoryAllocateInfo allocate_info = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .pNext = NULL,
-            .allocationSize = memory_requirements.size,
-            // VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISISBLE_BIT
-            // TODO: Use staging buffer
-            .memoryTypeIndex = 0,
-        };
-        assert(vkAllocateMemory(device, &allocate_info, NULL, &lines_memory) == VK_SUCCESS);
-        assert(vkBindBufferMemory(device, lines_buffer, lines_memory, 0) == VK_SUCCESS);
-
-        void * data;
-        assert(vkMapMemory(device, lines_memory, 0, VK_WHOLE_SIZE, 0, &data) == VK_SUCCESS);
-        memcpy(data, lines, sizeof(lines));
-        VkMappedMemoryRange flush_range = {
-            .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .pNext = NULL,
-            .memory = lines_memory,
-            .offset = 0,
-            .size = VK_WHOLE_SIZE,
-        };
-        assert(vkFlushMappedMemoryRanges(device, 1, &flush_range) == VK_SUCCESS);
-        vkUnmapMemory(device, lines_memory);
-    }
+    createBuffer(device, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(lines), lines, &lines_buffer, &lines_memory);
 
     VkBuffer image_buffer;
     VkDeviceMemory image_buffer_memory;
-    createRenderBuffer(device, render_size, 4, &image_buffer, &image_buffer_memory);
+    createBuffer(device, VK_BUFFER_USAGE_TRANSFER_DST_BIT, render_size.height * render_size.width * 4, NULL, &image_buffer, &image_buffer_memory);
 
     VkFramebuffer framebuffer;
     createFramebuffer(device, render_size, 1, &color_view, render_pass, &framebuffer);
