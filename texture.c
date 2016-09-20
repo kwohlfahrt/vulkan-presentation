@@ -166,7 +166,7 @@ int main(void) {
                 .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                 .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             }};
         VkAttachmentReference attachment_refs[NELEMS(attachments)] = {{
@@ -603,8 +603,6 @@ int main(void) {
             .pInheritanceInfo = NULL,
         };
         assert(vkBeginCommandBuffer(setup_buffer, &begin_info) == VK_SUCCESS);
-        cmdPrepareFrameImage(setup_buffer, color_image, VK_ACCESS_TRANSFER_READ_BIT,
-                             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
         VkImageMemoryBarrier tex_barrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,

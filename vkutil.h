@@ -12,9 +12,6 @@ void createFrameImage(VkDevice device, VkExtent2D size,
                       VkImageUsageFlags usage, VkImageAspectFlags aspect,
                       VkImage* image, VkDeviceMemory* memory, VkImageView* view);
 
-void cmdPrepareFrameImage(VkCommandBuffer cmd_buffer, VkImage image, VkAccessFlags access,
-                          VkImageLayout layout, VkImageAspectFlags aspect);
-
 void createFramebuffer(VkDevice device, VkExtent2D size,
                        uint32_t nviews, VkImageView* views,
                        VkRenderPass render_pass, VkFramebuffer* framebuffer);

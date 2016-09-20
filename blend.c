@@ -164,7 +164,7 @@ int main(void) {
                 .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                 .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             }, {
                 .flags = 0,
@@ -174,7 +174,7 @@ int main(void) {
                 .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             }};
         VkAttachmentReference attachment_refs[NELEMS(attachments)] = {{
@@ -438,7 +438,6 @@ int main(void) {
         assert(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &create_info, NULL, &pipelines[2]) == VK_SUCCESS);
     }
 
-    VkCommandBuffer setup_buffer;
     VkCommandBuffer draw_buffers[3];
     {
         VkCommandBufferAllocateInfo allocate_info = {
@@ -448,36 +447,8 @@ int main(void) {
             .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
             .commandBufferCount = 1,
         };
-        assert(vkAllocateCommandBuffers(device, &allocate_info, &setup_buffer) == VK_SUCCESS);
         allocate_info.commandBufferCount = NELEMS(draw_buffers);
         assert(vkAllocateCommandBuffers(device, &allocate_info, draw_buffers) == VK_SUCCESS);
-    }
-
-    {
-        VkCommandBufferBeginInfo begin_info = {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .pInheritanceInfo = NULL,
-        };
-        assert(vkBeginCommandBuffer(setup_buffer, &begin_info) == VK_SUCCESS);
-        cmdPrepareFrameImage(setup_buffer, color_image, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
-        cmdPrepareFrameImage(setup_buffer, depth_image, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
-        assert(vkEndCommandBuffer(setup_buffer) == VK_SUCCESS);
-
-        VkSubmitInfo submit_info = {
-            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .pNext = NULL,
-            .waitSemaphoreCount = 0,
-            .pWaitSemaphores = NULL,
-            .pWaitDstStageMask = NULL,
-            .commandBufferCount = 1,
-            .pCommandBuffers = &setup_buffer,
-            .signalSemaphoreCount = 0,
-            .pSignalSemaphores = NULL,
-        };
-
-        assert(vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE) == VK_SUCCESS);
     }
 
     for (size_t i = 0; i < NELEMS(draw_buffers); i++) {
@@ -528,8 +499,6 @@ int main(void) {
         assert(vkCreateFence(device, &create_info, NULL, &fence) == VK_SUCCESS);
     }
 
-    // Wait for set-up to finish
-    assert(vkQueueWaitIdle(queue) == VK_SUCCESS);
     {
         char * filenames[] = {"blend_no-z-test.tif", "blend_z-test.tif", "blend_add.tif"};
         char * image_data;
@@ -589,7 +558,6 @@ int main(void) {
     vkDestroyShaderModule(device, fragment_shader, NULL);
 
     vkDestroyRenderPass(device, render_pass, NULL);
-    vkFreeCommandBuffers(device, cmd_pool, 1, &setup_buffer);
     vkFreeCommandBuffers(device, cmd_pool, NELEMS(draw_buffers), draw_buffers);
     vkDestroyCommandPool(device, cmd_pool, NULL);
     vkDestroyDevice(device, NULL);

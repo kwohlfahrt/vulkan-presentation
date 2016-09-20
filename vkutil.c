@@ -78,27 +78,6 @@ void createFrameImage(VkDevice device, VkExtent2D size,
     }
 }
 
-void cmdPrepareFrameImage(VkCommandBuffer cmd_buffer, VkImage image, VkAccessFlags access,
-                          VkImageLayout layout, VkImageAspectFlags aspect) {
-    VkImageMemoryBarrier layout_barrier = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext = NULL,
-        .srcAccessMask = 0,
-        .dstAccessMask = access,
-        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout = layout,
-        .image = image,
-        .subresourceRange = {
-            .aspectMask = aspect,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        },
-    };
-    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, NULL, 0, NULL, 1, &layout_barrier);
-}
-
 void createFramebuffer(VkDevice device, VkExtent2D size,
                        uint32_t nviews, VkImageView* views,
                        VkRenderPass render_pass, VkFramebuffer* framebuffer){
