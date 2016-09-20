@@ -29,7 +29,7 @@ const struct Vertex verts[3] = {
 void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
              VkPipeline pipeline, VkBuffer vertex_buffer,
              VkRenderPass render_pass, VkFramebuffer framebuffer){
-    VkClearValue clear_values[2] = {{
+    VkClearValue clear_values[] = {{
             .color.float32 = {0.0, 0.0, 0.0, 1.0},
         }, {
             .depthStencil = {.depth = 1.0},
@@ -159,23 +159,33 @@ int main(void) {
         VkAttachmentDescription attachments[] = {{
                 .flags = 0,
                 .format = VK_FORMAT_R8G8B8A8_UNORM,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            }, {
-                .flags = 0,
-                .format = VK_FORMAT_D16_UNORM,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .samples = VK_SAMPLE_COUNT_8_BIT,
                 .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                .finalLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            }, {
+                .flags = 0,
+                .format = VK_FORMAT_D16_UNORM,
+                .samples = VK_SAMPLE_COUNT_8_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            },{
+                .flags = 0,
+                .format = VK_FORMAT_R8G8B8A8_UNORM,
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             }};
         VkAttachmentReference attachment_refs[NELEMS(attachments)] = {{
                 .attachment = 0,
@@ -183,6 +193,9 @@ int main(void) {
             }, {
                 .attachment = 1,
                 .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            },{
+                .attachment = 2,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             }};
         VkSubpassDescription subpasses[1] = {{
                 .flags = 0,
@@ -191,7 +204,7 @@ int main(void) {
                 .pInputAttachments = NULL,
                 .colorAttachmentCount = 1,
                 .pColorAttachments = &attachment_refs[0],
-                .pResolveAttachments = NULL,
+                .pResolveAttachments = &attachment_refs[2],
                 .pDepthStencilAttachment = &attachment_refs[1],
                 .preserveAttachmentCount = 0,
                 .pPreserveAttachments = NULL,
@@ -219,20 +232,19 @@ int main(void) {
         assert(vkCreateRenderPass(device, &create_info, NULL, &render_pass) == VK_SUCCESS);
     }
 
-    VkImage color_image;
-    VkDeviceMemory color_image_memory;
-    VkImageView color_view;
+    VkImage images[3];
+    VkDeviceMemory image_memories[NELEMS(images)];
+    VkImageView views[NELEMS(images)];
+    createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_8_BIT,
+                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
+                     &images[0], &image_memories[0], &views[0]);
+    createFrameImage(device, render_size, VK_FORMAT_D16_UNORM, VK_SAMPLE_COUNT_8_BIT,
+                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT,
+                     &images[1], &image_memories[1], &views[1]);
     createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT,
                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                      VK_IMAGE_ASPECT_COLOR_BIT,
-                     &color_image, &color_image_memory, &color_view);
-
-    VkImage depth_image;
-    VkDeviceMemory depth_image_memory;
-    VkImageView depth_view;
-    createFrameImage(device, render_size, VK_FORMAT_D16_UNORM, VK_SAMPLE_COUNT_1_BIT,
-                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT,
-                     &depth_image, &depth_image_memory, &depth_view);
+                     &images[2], &image_memories[2], &views[2]);
 
     VkBuffer verts_buffer;
     VkDeviceMemory verts_memory;
@@ -244,8 +256,7 @@ int main(void) {
 
     VkFramebuffer framebuffer;
     {
-        VkImageView views[2] = {color_view, depth_view};
-        createFramebuffer(device, render_size, 2, views, render_pass, &framebuffer);
+        createFramebuffer(device, render_size, 3, views, render_pass, &framebuffer);
     }
 
     VkShaderModule vertex_shader, fragment_shader;
@@ -366,7 +377,7 @@ int main(void) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+            .rasterizationSamples = VK_SAMPLE_COUNT_8_BIT,
             .sampleShadingEnable = VK_FALSE,
             .minSampleShading = 0.0,
             .pSampleMask = NULL,
@@ -471,7 +482,7 @@ int main(void) {
                             .height = render_size.height,
                             .depth = 1},
         };
-        vkCmdCopyImageToBuffer(draw_buffers[i], color_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        vkCmdCopyImageToBuffer(draw_buffers[i], images[2], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                image_buffer, 1, &copy);
 
         VkBufferMemoryBarrier transfer_barrier = {
@@ -538,12 +549,11 @@ int main(void) {
     vkDestroyFence(device, fence, NULL);
 
     vkDestroyFramebuffer(device, framebuffer, NULL);
-    vkDestroyImage(device, color_image, NULL);
-    vkDestroyImageView(device, color_view, NULL);
-    vkFreeMemory(device, color_image_memory, NULL);
-    vkDestroyImage(device, depth_image, NULL);
-    vkDestroyImageView(device, depth_view, NULL);
-    vkFreeMemory(device, depth_image_memory, NULL);
+    for (size_t i = 0; i < NELEMS(images); i++) {
+        vkDestroyImage(device, images[i], NULL);
+        vkDestroyImageView(device, views[i], NULL);
+        vkFreeMemory(device, image_memories[i], NULL);
+    }
 
     vkDestroyBuffer(device, image_buffer, NULL);
     vkFreeMemory(device, image_buffer_memory, NULL);
