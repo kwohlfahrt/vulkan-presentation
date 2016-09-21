@@ -22,12 +22,15 @@ BLEND_TARGETS = $(foreach img,$(BLEND_VARS),$(subst IMG,$(img),blend%IMG.tif))
 $(BLEND_TARGETS) : blend.bin blend.frag.spv blend.vert.spv
 	./$<
 
+CUBE_VARS = persp ortho
+CUBE_IMAGES = $(foreach img,$(CUBE_VARS),$(subst IMG,$(img),cube_IMG.tif))
+CUBE_TARGETS = $(foreach img,$(CUBE_VARS),$(subst IMG,$(img),cube%IMG.tif))
+$(CUBE_TARGETS) : cube.bin cube.vert.spv cube.geom.spv cube.frag.spv wireframe.geom.spv device_coords.frag.spv
+	./$<
+
 .PRECIOUS : %.frag.spv %.vert.spv %.geom.spv %.bin %.o
 .SECONDEXPANSION:
 %.tif : %.bin %.frag.spv %.vert.spv $$(addsuffix .spv,$$(wildcard $$*.geom))
-	./$<
-
-cube.tif : cube.bin cube.vert.spv cube.geom.spv cube.frag.spv wireframe.geom.spv device_coords.frag.spv
 	./$<
 
 .PHONY : clean
@@ -35,4 +38,4 @@ clean :
 	rm -f *.spv *.o *.tif *.bin
 
 .PHONY : all
-all : rasterize.tif device_coords.tif vertex_shader.tif fill.tif texture.tif cube.tif $(BLEND_IMAGES)
+all : rasterize.tif device_coords.tif vertex_shader.tif fill.tif texture.tif $(BLEND_IMAGES) $(CUBE_IMAGES)

@@ -37,38 +37,6 @@ const uint32_t indices[20] = {
     4, 0, 6, 2,
 };
 
-void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
-             size_t npipelines, VkPipeline * pipelines,
-             VkBuffer vertex_buffer, VkBuffer index_buffer,
-             VkRenderPass render_pass, VkFramebuffer framebuffer){
-    VkClearValue clear_values[] = {{
-            .color.float32 = {0.0, 0.0, 0.0, 1.0},
-        }, {
-            .depthStencil = {.depth = 1.0},
-        }};
-    VkRenderPassBeginInfo renderpass_begin_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .pNext = NULL,
-        .renderPass = render_pass,
-        .framebuffer = framebuffer,
-        .renderArea = {
-            .offset = {.x = 0, .y = 0},
-            .extent = size,
-        },
-        .clearValueCount = NELEMS(clear_values),
-        .pClearValues = clear_values,
-    };
-    vkCmdBeginRenderPass(draw_buffer, &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-    VkDeviceSize offset = 0;
-    vkCmdBindVertexBuffers(draw_buffer, 0, 1, &vertex_buffer, &offset);
-    vkCmdBindIndexBuffer(draw_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
-    for (size_t i = 0; i < npipelines; i++) {
-        vkCmdBindPipeline(draw_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[i]);
-        vkCmdDrawIndexed(draw_buffer, 20, 27, 0, 0, 0);
-    }
-    vkCmdEndRenderPass(draw_buffer);
-}
-
 int main(void) {
     VkInstance instance;
     {
@@ -302,14 +270,19 @@ int main(void) {
 
     VkPipelineLayout pipeline_layout;
     {
+        VkPushConstantRange push_range = {
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .offset = 0,
+            .size = 4,
+        };
         VkPipelineLayoutCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
             .setLayoutCount = 0,
             .pSetLayouts = NULL,
-            .pushConstantRangeCount = 0,
-            .pPushConstantRanges = NULL,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &push_range,
         };
         assert(vkCreatePipelineLayout(device, &create_info, NULL, &pipeline_layout) == VK_SUCCESS);
     }
@@ -469,16 +442,16 @@ int main(void) {
         assert(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &create_info, NULL, &pipelines[1]) == VK_SUCCESS);
     }
 
-    VkCommandBuffer draw_buffer;
+    VkCommandBuffer draw_buffers[2];
     {
         VkCommandBufferAllocateInfo allocate_info = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             .pNext = NULL,
             .commandPool = cmd_pool,
             .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount = 1,
+            .commandBufferCount = NELEMS(draw_buffers),
         };
-        assert(vkAllocateCommandBuffers(device, &allocate_info, &draw_buffer) == VK_SUCCESS);
+        assert(vkAllocateCommandBuffers(device, &allocate_info, draw_buffers) == VK_SUCCESS);
     }
 
     {
@@ -488,8 +461,38 @@ int main(void) {
             .flags = 0,
             .pInheritanceInfo = NULL,
         };
-        assert(vkBeginCommandBuffer(draw_buffer, &begin_info) == VK_SUCCESS);
-        cmdDraw(draw_buffer, render_size, 2, pipelines, verts_buffer, index_buffer, render_pass, framebuffer);
+
+        VkClearValue clear_values[] = {{
+                .color.float32 = {0.0, 0.0, 0.0, 1.0},
+            }, {
+                .depthStencil = {.depth = 1.0},
+            }};
+        VkRenderPassBeginInfo renderpass_begin_info = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .pNext = NULL,
+            .renderPass = render_pass,
+            .framebuffer = framebuffer,
+            .renderArea = {
+                .offset = {.x = 0, .y = 0},
+                .extent = render_size,
+            },
+            .clearValueCount = NELEMS(clear_values),
+            .pClearValues = clear_values,
+        };
+        for (size_t i = 0; i < NELEMS(draw_buffers); i++){
+            assert(vkBeginCommandBuffer(draw_buffers[i], &begin_info) == VK_SUCCESS);
+            uint32_t persp = i == 0;
+            vkCmdPushConstants(draw_buffers[i], pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(persp), &persp);
+            vkCmdBeginRenderPass(draw_buffers[i], &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+            VkDeviceSize offset = 0;
+            vkCmdBindVertexBuffers(draw_buffers[i], 0, 1, &verts_buffer, &offset);
+            vkCmdBindIndexBuffer(draw_buffers[i], index_buffer, 0, VK_INDEX_TYPE_UINT32);
+            for (size_t j = 0; j < NELEMS(pipelines); j++) {
+                vkCmdBindPipeline(draw_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[j]);
+                vkCmdDrawIndexed(draw_buffers[i], 20, 27, 0, 0, 0);
+            }
+            vkCmdEndRenderPass(draw_buffers[i]);
+        }
 
         VkBufferImageCopy copy = {
             .bufferOffset = 0,
@@ -501,8 +504,6 @@ int main(void) {
                             .height = render_size.height,
                             .depth = 1},
         };
-        vkCmdCopyImageToBuffer(draw_buffer, images[2], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image_buffer, 1, &copy);
-
         VkBufferMemoryBarrier transfer_barrier = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
             .pNext = 0,
@@ -514,8 +515,12 @@ int main(void) {
             .offset = 0,
             .size = VK_WHOLE_SIZE,
         };
-        vkCmdPipelineBarrier(draw_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, NULL, 1, &transfer_barrier, 0, NULL);
-        assert(vkEndCommandBuffer(draw_buffer) == VK_SUCCESS);
+        for (size_t i = 0; i < NELEMS(draw_buffers); i++){
+            vkCmdCopyImageToBuffer(draw_buffers[i], images[2], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image_buffer, 1, &copy);
+
+            vkCmdPipelineBarrier(draw_buffers[i], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, NULL, 1, &transfer_barrier, 0, NULL);
+            assert(vkEndCommandBuffer(draw_buffers[i]) == VK_SUCCESS);
+        }
     }
 
     VkFence fence;
@@ -529,6 +534,7 @@ int main(void) {
     }
 
     {
+        char * filenames[] = {"cube_persp.tif", "cube_ortho.tif"};
         char * image_data;
         assert(vkMapMemory(device, image_buffer_memory, 0, VK_WHOLE_SIZE, 0, (void **) &image_data) == VK_SUCCESS);
         VkMappedMemoryRange image_flush = {
@@ -550,12 +556,14 @@ int main(void) {
             .pSignalSemaphores = NULL,
         };
 
-        submit_info.pCommandBuffers = &draw_buffer;
-        assert(vkResetFences(device, 1, &fence) == VK_SUCCESS);
-        assert(vkQueueSubmit(queue, 1, &submit_info, fence) == VK_SUCCESS);
-        assert(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS);
-        assert(vkInvalidateMappedMemoryRanges(device, 1, &image_flush) == VK_SUCCESS);
-        assert(writeTiff("cube.tif", image_data, render_size, nchannels) == 0);
+        for (size_t i = 0; i < NELEMS(filenames); i++){
+            submit_info.pCommandBuffers = &draw_buffers[i];
+            assert(vkResetFences(device, 1, &fence) == VK_SUCCESS);
+            assert(vkQueueSubmit(queue, 1, &submit_info, fence) == VK_SUCCESS);
+            assert(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS);
+            assert(vkInvalidateMappedMemoryRanges(device, 1, &image_flush) == VK_SUCCESS);
+            assert(writeTiff(filenames[i], image_data, render_size, nchannels) == 0);
+        }
 
         vkUnmapMemory(device, image_buffer_memory);
     }
@@ -587,7 +595,7 @@ int main(void) {
         vkDestroyShaderModule(device, shaders[i], NULL);
 
     vkDestroyRenderPass(device, render_pass, NULL);
-    vkFreeCommandBuffers(device, cmd_pool, 1, &draw_buffer);
+    vkFreeCommandBuffers(device, cmd_pool, NELEMS(draw_buffers), draw_buffers);
     vkDestroyCommandPool(device, cmd_pool, NULL);
     vkDestroyDevice(device, NULL);
     {
