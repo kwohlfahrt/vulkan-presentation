@@ -15,8 +15,11 @@ OBJECTS = info.o tiff.o util.o vkutil.o
 %.geom.spv : %.geom
 	glslangValidator -V -o $@ $<
 
-BLEND_IMAGES = $(foreach img,no-z-test z-test add,$(subst IMG,$(img),blend_IMG.tif))
-$(BLEND_IMAGES) : blend.bin blend.frag.spv blend.vert.spv
+# Use pattern rule to correctly make multiple files
+BLEND_VARS = no-z-test z-test add
+BLEND_IMAGES = $(foreach img,$(BLEND_VARS),$(subst IMG,$(img),blend_IMG.tif))
+BLEND_TARGETS = $(foreach img,$(BLEND_VARS),$(subst IMG,$(img),blend%IMG.tif))
+$(BLEND_TARGETS) : blend.bin blend.frag.spv blend.vert.spv
 	./$<
 
 .PRECIOUS : %.frag.spv %.vert.spv %.geom.spv %.bin %.o
