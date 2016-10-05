@@ -30,9 +30,11 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
              VkPipeline pipeline, VkBuffer vertex_buffer,
              VkRenderPass render_pass, VkFramebuffer framebuffer){
     VkClearValue clear_values[] = {{
+            .depthStencil = {.depth = 1.0},
+        }, {
             .color.float32 = {0.0, 0.0, 0.0, 1.0},
         }, {
-            .depthStencil = {.depth = 1.0},
+            .color.float32 = {1.0, 1.0, 1.0, 1.0},
         }};
     VkRenderPassBeginInfo renderpass_begin_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -107,6 +109,9 @@ int main(void) {
         float queue_priorities[] = {1.0};
         const char validation_layer[] = "VK_LAYER_LUNARG_standard_validation";
         const char* layers[] = {validation_layer,};
+        VkPhysicalDeviceFeatures enabled_features = {
+            .independentBlend = VK_TRUE,
+        };
 
         uint32_t nqueues;
         matchingQueues(phy_device, VK_QUEUE_GRAPHICS_BIT, &nqueues, NULL);
@@ -134,7 +139,7 @@ int main(void) {
             .ppEnabledLayerNames = layers,
             .enabledExtensionCount = 0,
             .ppEnabledExtensionNames = NULL,
-            .pEnabledFeatures = NULL,
+            .pEnabledFeatures = &enabled_features,
         };
 
         assert(vkCreateDevice(phy_device, &create_info, NULL, &device) == VK_SUCCESS);
@@ -158,6 +163,16 @@ int main(void) {
     {
         VkAttachmentDescription attachments[] = {{
                 .flags = 0,
+                .format = VK_FORMAT_D16_UNORM,
+                .samples = VK_SAMPLE_COUNT_8_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            }, {
+                .flags = 0,
                 .format = VK_FORMAT_R8G8B8A8_UNORM,
                 .samples = VK_SAMPLE_COUNT_8_BIT,
                 .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -168,7 +183,17 @@ int main(void) {
                 .finalLayout = VK_IMAGE_LAYOUT_UNDEFINED,
             }, {
                 .flags = 0,
-                .format = VK_FORMAT_D16_UNORM,
+                .format = VK_FORMAT_R8G8B8A8_UNORM,
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            }, {
+                .flags = 0,
+                .format = VK_FORMAT_R8_UNORM,
                 .samples = VK_SAMPLE_COUNT_8_BIT,
                 .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -176,9 +201,9 @@ int main(void) {
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            },{
+            }, {
                 .flags = 0,
-                .format = VK_FORMAT_R8G8B8A8_UNORM,
+                .format = VK_FORMAT_R8_UNORM,
                 .samples = VK_SAMPLE_COUNT_1_BIT,
                 .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -189,23 +214,35 @@ int main(void) {
             }};
         VkAttachmentReference attachment_refs[NELEMS(attachments)] = {{
                 .attachment = 0,
-                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             }, {
                 .attachment = 1,
-                .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            },{
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            }, {
                 .attachment = 2,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            }, {
+                .attachment = 3,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            }, {
+                .attachment = 4,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             }};
+        VkAttachmentReference color_attachments[2] = {
+            attachment_refs[1], attachment_refs[3]
+        };
+        VkAttachmentReference resolve_attachments[2] = {
+            attachment_refs[2], attachment_refs[4]
+        };
         VkSubpassDescription subpasses[1] = {{
                 .flags = 0,
                 .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
                 .inputAttachmentCount = 0,
                 .pInputAttachments = NULL,
-                .colorAttachmentCount = 1,
-                .pColorAttachments = &attachment_refs[0],
-                .pResolveAttachments = &attachment_refs[2],
-                .pDepthStencilAttachment = &attachment_refs[1],
+                .colorAttachmentCount = 2,
+                .pColorAttachments = color_attachments,
+                .pResolveAttachments = resolve_attachments,
+                .pDepthStencilAttachment = &attachment_refs[0],
                 .preserveAttachmentCount = 0,
                 .pPreserveAttachments = NULL,
             }};
@@ -232,19 +269,26 @@ int main(void) {
         assert(vkCreateRenderPass(device, &create_info, NULL, &render_pass) == VK_SUCCESS);
     }
 
-    VkImage images[3];
+    VkImage images[5];
     VkDeviceMemory image_memories[NELEMS(images)];
     VkImageView views[NELEMS(images)];
-    createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_8_BIT,
-                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
-                     &images[0], &image_memories[0], &views[0]);
     createFrameImage(device, render_size, VK_FORMAT_D16_UNORM, VK_SAMPLE_COUNT_8_BIT,
                      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT,
+                     &images[0], &image_memories[0], &views[0]);
+    createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_8_BIT,
+                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
                      &images[1], &image_memories[1], &views[1]);
     createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT,
                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                      VK_IMAGE_ASPECT_COLOR_BIT,
                      &images[2], &image_memories[2], &views[2]);
+    createFrameImage(device, render_size, VK_FORMAT_R8_UNORM, VK_SAMPLE_COUNT_8_BIT,
+                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
+                     &images[3], &image_memories[3], &views[3]);
+    createFrameImage(device, render_size, VK_FORMAT_R8_UNORM, VK_SAMPLE_COUNT_1_BIT,
+                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                     VK_IMAGE_ASPECT_COLOR_BIT,
+                     &images[4], &image_memories[4], &views[4]);
 
     VkBuffer verts_buffer;
     VkDeviceMemory verts_memory;
@@ -256,7 +300,7 @@ int main(void) {
 
     VkFramebuffer framebuffer;
     {
-        createFramebuffer(device, render_size, 3, views, render_pass, &framebuffer);
+        createFramebuffer(device, render_size, 5, views, render_pass, &framebuffer);
     }
 
     VkShaderModule vertex_shader, fragment_shader;
@@ -398,25 +442,28 @@ int main(void) {
             .minDepthBounds = 0.0,
             .maxDepthBounds = 1.0,
         };
-        VkPipelineColorBlendAttachmentState color_blend_attachment = {
-            .blendEnable = VK_FALSE,
-            .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
-            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE,
-            .colorBlendOp = VK_BLEND_OP_ADD,
-            // Not sure alpha blending works right
-            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-            .alphaBlendOp = VK_BLEND_OP_MAX,
-            .colorWriteMask = ( VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
-                                | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT),
-        };
+        VkPipelineColorBlendAttachmentState color_blend_attachments[2] = {{
+                .blendEnable = VK_FALSE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                // Not sure alpha blending works right
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .alphaBlendOp = VK_BLEND_OP_MAX,
+                .colorWriteMask = ( VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+                                    | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT),
+            }, {
+                .blendEnable = VK_FALSE,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT,
+            }};
         VkPipelineColorBlendStateCreateInfo color_blend_state = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
             .logicOpEnable = VK_FALSE, //.logicOp = 0,
-            .attachmentCount = 1,
-            .pAttachments = &color_blend_attachment,
+            .attachmentCount = NELEMS(color_blend_attachments),
+            .pAttachments = color_blend_attachments,
             .blendConstants = {},
         };
 
@@ -445,7 +492,7 @@ int main(void) {
         depth_stencil_state.depthTestEnable = VK_TRUE;
         assert(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &create_info, NULL, &pipelines[1]) == VK_SUCCESS);
         depth_stencil_state.depthTestEnable = VK_FALSE;
-        color_blend_attachment.blendEnable = VK_TRUE;
+        color_blend_attachments[0].blendEnable = VK_TRUE;
         assert(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &create_info, NULL, &pipelines[2]) == VK_SUCCESS);
     }
 
