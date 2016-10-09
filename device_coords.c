@@ -105,6 +105,9 @@ int main(void) {
         float queue_priorities[] = {1.0};
         const char validation_layer[] = "VK_LAYER_LUNARG_standard_validation";
         const char* layers[] = {validation_layer,};
+        const VkPhysicalDeviceFeatures features = {
+            .fillModeNonSolid = VK_TRUE,
+        };
 
         uint32_t nqueues;
         matchingQueues(phy_device, VK_QUEUE_GRAPHICS_BIT, &nqueues, NULL);
@@ -132,7 +135,7 @@ int main(void) {
             .ppEnabledLayerNames = layers,
             .enabledExtensionCount = 0,
             .ppEnabledExtensionNames = NULL,
-            .pEnabledFeatures = NULL,
+            .pEnabledFeatures = &features,
         };
 
         assert(vkCreateDevice(phy_device, &create_info, NULL, &device) == VK_SUCCESS);
@@ -223,7 +226,7 @@ int main(void) {
     createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_8_BIT,
                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
                      &color_images[0], &color_image_memories[0], &color_views[0]);
-    createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_8_BIT,
+    createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT,
                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                      VK_IMAGE_ASPECT_COLOR_BIT,
                      &color_images[1], &color_image_memories[1], &color_views[1]);

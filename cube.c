@@ -109,6 +109,7 @@ int main(void) {
 
         VkPhysicalDeviceFeatures features = {
             .geometryShader = VK_TRUE,
+            .fillModeNonSolid = VK_TRUE,
         };
 
         VkDeviceCreateInfo create_info = {
@@ -165,7 +166,7 @@ int main(void) {
                 .finalLayout = VK_IMAGE_LAYOUT_UNDEFINED,
             }, {
                 .flags = 0,
-                .format = VK_FORMAT_D16_UNORM,
+                .format = VK_FORMAT_R8G8B8A8_UNORM,
                 .samples = VK_SAMPLE_COUNT_1_BIT,
                 .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .storeOp = VK_ATTACHMENT_STORE_OP_STORE,

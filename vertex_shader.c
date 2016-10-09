@@ -105,6 +105,9 @@ int main(void) {
         float queue_priorities[] = {1.0};
         const char validation_layer[] = "VK_LAYER_LUNARG_standard_validation";
         const char* layers[] = {validation_layer,};
+        const VkPhysicalDeviceFeatures features = {
+            .fillModeNonSolid = VK_TRUE,
+        };
 
         uint32_t nqueues;
         matchingQueues(phy_device, VK_QUEUE_GRAPHICS_BIT, &nqueues, NULL);
@@ -132,7 +135,7 @@ int main(void) {
             .ppEnabledLayerNames = layers,
             .enabledExtensionCount = 0,
             .ppEnabledExtensionNames = NULL,
-            .pEnabledFeatures = NULL,
+            .pEnabledFeatures = &features,
         };
 
         assert(vkCreateDevice(phy_device, &create_info, NULL, &device) == VK_SUCCESS);

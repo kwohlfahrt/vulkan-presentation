@@ -34,7 +34,11 @@ void cmdDraw(VkCommandBuffer draw_buffer, VkExtent2D size,
         }, {
             .color.float32 = {0.0, 0.0, 0.0, 1.0},
         }, {
+            // Not cleared
+        }, {
             .color.float32 = {1.0, 1.0, 1.0, 1.0},
+        }, {
+            // Not cleared
         }};
     VkRenderPassBeginInfo renderpass_begin_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
