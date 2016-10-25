@@ -13,7 +13,7 @@ debugReportCallback(VkDebugReportFlagsEXT flags __attribute__((unused)),
                     const char* pLayerPrefix __attribute__((unused)),
                     const char* pMessage, void* pUserData __attribute__((unused))){
     fprintf(stdout, "%s\n", pMessage);
-    return VK_FALSE;
+    return VK_TRUE;
 }
 
 void createFrameImage(VkDevice device, VkExtent2D size,
