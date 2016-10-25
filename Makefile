@@ -28,6 +28,12 @@ CUBE_TARGETS = $(foreach img,$(CUBE_VARS),$(subst IMG,$(img),cube%IMG.tif))
 $(CUBE_TARGETS) : cube.bin cube.vert.spv cube.geom.spv cube.frag.spv wireframe.geom.spv device_coords.frag.spv
 	./$<
 
+LIGHTING_VARS = color normal
+LIGHTING_IMAGES = $(foreach img,$(LIGHTING_VARS),$(subst IMG,$(img),lighting_IMG.tif))
+LIGHTING_TARGETS = $(foreach img,$(LIGHTING_VARS),$(subst IMG,$(img),lighting%IMG.tif))
+$(LIGHTING_TARGETS) : lighting.bin lighting.vert.spv lighting.geom.spv lighting.frag.spv
+	./$<
+
 .PRECIOUS : %.frag.spv %.vert.spv %.geom.spv %.bin %.o
 .SECONDEXPANSION:
 %.tif : %.bin %.frag.spv %.vert.spv $$(addsuffix .spv,$$(wildcard $$*.geom))
@@ -38,4 +44,4 @@ clean :
 	rm -f *.spv *.o *.tif *.bin
 
 .PHONY : all
-all : rasterize.tif device_coords.tif vertex_shader.tif fill.tif texture.tif $(BLEND_IMAGES) $(CUBE_IMAGES)
+all : rasterize.tif device_coords.tif vertex_shader.tif fill.tif texture.tif $(BLEND_IMAGES) $(CUBE_IMAGES) $(LIGHTING_IMAGES)
