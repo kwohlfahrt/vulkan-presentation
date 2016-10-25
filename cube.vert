@@ -56,6 +56,6 @@ void main() {
     ortho(0.3, 1.0, 10.0, 1920.0 / 1440.0);
 
   gl_Position = proj
-              * lookAt(vec3( 1.5,-3.0,-4.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0))
+              * lookAt(vec3(-1.5,-3.0,-4.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0))
               * vec4(out_pos * 0.8 + instance_pos, 1.0);
 }
