@@ -25,7 +25,7 @@ $(BLEND_TARGETS) : blend.bin blend.frag.spv blend.vert.spv
 CUBE_VARS = persp ortho
 CUBE_IMAGES = $(foreach img,$(CUBE_VARS),$(subst IMG,$(img),cube_IMG.tif))
 CUBE_TARGETS = $(foreach img,$(CUBE_VARS),$(subst IMG,$(img),cube%IMG.tif))
-$(CUBE_TARGETS) : cube.bin cube.vert.spv cube.geom.spv cube.frag.spv wireframe.geom.spv device_coords.frag.spv
+$(CUBE_TARGETS) : cube.bin cube.vert.spv cube.geom.spv cube.frag.spv wireframe.geom.spv color.frag.spv
 	./$<
 
 LIGHTING_VARS = color normal
@@ -34,10 +34,22 @@ LIGHTING_TARGETS = $(foreach img,$(LIGHTING_VARS),$(subst IMG,$(img),lighting%IM
 $(LIGHTING_TARGETS) : lighting.bin lighting.vert.spv lighting.geom.spv lighting.frag.spv
 	./$<
 
-.PRECIOUS : %.frag.spv %.vert.spv %.geom.spv %.bin %.o
-.SECONDEXPANSION:
-%.tif : %.bin %.frag.spv %.vert.spv $$(addsuffix .spv,$$(wildcard $$*.geom))
+rasterize.tif : rasterize.bin rasterize.vert.spv rasterize.frag.spv
 	./$<
+
+device_coords.tif : device_coords.bin device_coords.vert.spv color.frag.spv
+	./$<
+
+vertex_shader.tif : vertex_shader.bin vertex_shader.vert.spv color.frag.spv
+	./$<
+
+fill.tif : fill.bin vertex_shader.vert.spv color.frag.spv
+	./$<
+
+texture.tif : texture.bin texture.vert.spv texture.frag.spv
+	./$<
+
+.PRECIOUS : %.frag.spv %.vert.spv %.geom.spv %.bin %.o
 
 .PHONY : clean
 clean :

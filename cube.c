@@ -251,7 +251,7 @@ int main(void) {
 
     VkShaderModule shaders[5];
     {
-        char* filenames[NELEMS(shaders)] = {"cube.vert.spv", "cube.geom.spv", "cube.frag.spv", "wireframe.geom.spv", "device_coords.frag.spv"};
+        char* filenames[NELEMS(shaders)] = {"cube.vert.spv", "cube.geom.spv", "cube.frag.spv", "wireframe.geom.spv", "color.frag.spv"};
         for (size_t i = 0; i < NELEMS(shaders); i++){
             size_t code_size;
             uint32_t * code;

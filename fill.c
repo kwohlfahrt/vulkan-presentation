@@ -239,10 +239,9 @@ int main(void) {
     VkFramebuffer framebuffer;
     createFramebuffer(device, render_size, 2, color_views, render_pass, &framebuffer);
 
-    VkShaderModule vertex_shader, fragment_shader;
+    VkShaderModule shaders[2];
     {
-        char* filenames[] = {"fill.vert.spv", "fill.frag.spv"};
-        VkShaderModule * modules[NELEMS(filenames)] = {&vertex_shader, &fragment_shader};
+        char* filenames[NELEMS(shaders)] = {"vertex_shader.vert.spv", "color.frag.spv"};
         for (size_t i = 0; i < NELEMS(filenames); i++){
             size_t code_size;
             uint32_t * code;
@@ -255,7 +254,7 @@ int main(void) {
                 .codeSize = code_size,
                 .pCode = code,
             };
-            assert(vkCreateShaderModule(device, &create_info, NULL, modules[i]) == VK_SUCCESS);
+            assert(vkCreateShaderModule(device, &create_info, NULL, &shaders[i]) == VK_SUCCESS);
             free(code);
         }
     }
@@ -281,7 +280,7 @@ int main(void) {
                 .pNext = NULL,
                 .flags = 0,
                 .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                .module = vertex_shader,
+                .module = shaders[0],
                 .pName = "main",
                 .pSpecializationInfo = NULL,
             },{
@@ -289,7 +288,7 @@ int main(void) {
                 .pNext = NULL,
                 .flags = 0,
                 .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .module = fragment_shader,
+                .module = shaders[1],
                 .pName = "main",
                 .pSpecializationInfo = NULL,
             }};
@@ -525,8 +524,8 @@ int main(void) {
 
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
-    vkDestroyShaderModule(device, vertex_shader, NULL);
-    vkDestroyShaderModule(device, fragment_shader, NULL);
+    for (size_t i = 0; i < NELEMS(shaders); i++)
+        vkDestroyShaderModule(device, shaders[i], NULL);
 
     vkDestroyRenderPass(device, render_pass, NULL);
     vkFreeCommandBuffers(device, cmd_pool, 1, &draw_buffer);

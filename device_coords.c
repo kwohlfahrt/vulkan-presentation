@@ -244,7 +244,7 @@ int main(void) {
 
     VkShaderModule vertex_shader, fragment_shader;
     {
-        char* filenames[] = {"device_coords.vert.spv", "device_coords.frag.spv"};
+        char* filenames[] = {"device_coords.vert.spv", "color.frag.spv"};
         VkShaderModule * modules[NELEMS(filenames)] = {&vertex_shader, &fragment_shader};
         for (size_t i = 0; i < NELEMS(filenames); i++){
             size_t code_size;
