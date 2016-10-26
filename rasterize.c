@@ -158,16 +158,6 @@ int main(void) {
         VkAttachmentDescription attachments[] = {{
                 .flags = 0,
                 .format = VK_FORMAT_R8G8B8A8_UNORM,
-                .samples = VK_SAMPLE_COUNT_8_BIT,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            },{
-                .flags = 0,
-                .format = VK_FORMAT_R8G8B8A8_UNORM,
                 .samples = VK_SAMPLE_COUNT_1_BIT,
                 .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -179,9 +169,6 @@ int main(void) {
         VkAttachmentReference attachment_refs[NELEMS(attachments)] = {{
                 .attachment = 0,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            },{
-                .attachment = 1,
-                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             }};
         VkSubpassDescription subpasses[1] = {{
                 .flags = 0,
@@ -190,7 +177,7 @@ int main(void) {
                 .pInputAttachments = NULL,
                 .colorAttachmentCount = 1,
                 .pColorAttachments = &attachment_refs[0],
-                .pResolveAttachments = &attachment_refs[1],
+                .pResolveAttachments = NULL,
                 .pDepthStencilAttachment = NULL,
                 .preserveAttachmentCount = 0,
                 .pPreserveAttachments = NULL,
@@ -218,16 +205,13 @@ int main(void) {
         assert(vkCreateRenderPass(device, &create_info, NULL, &render_pass) == VK_SUCCESS);
     }
 
-    VkImage color_images[2];
-    VkDeviceMemory color_image_memories[NELEMS(color_images)];
-    VkImageView color_views[NELEMS(color_images)];
-    createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_8_BIT,
-                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
-                     &color_images[0], &color_image_memories[0], &color_views[0]);
+    VkImage images[1];
+    VkDeviceMemory image_memories[NELEMS(images)];
+    VkImageView views[NELEMS(images)];
     createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT,
                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                      VK_IMAGE_ASPECT_COLOR_BIT,
-                     &color_images[1], &color_image_memories[1], &color_views[1]);
+                     &images[0], &image_memories[0], &views[0]);
 
     VkBuffer lines_buffer;
     VkDeviceMemory lines_memory;
@@ -238,7 +222,7 @@ int main(void) {
     createBuffer(device, VK_BUFFER_USAGE_TRANSFER_DST_BIT, render_size.height * render_size.width * 4, NULL, &image_buffer, &image_buffer_memory);
 
     VkFramebuffer framebuffer;
-    createFramebuffer(device, render_size, 2, color_views, render_pass, &framebuffer);
+    createFramebuffer(device, render_size, NELEMS(images), views, render_pass, &framebuffer);
 
     VkShaderModule vertex_shader, fragment_shader;
     {
@@ -414,7 +398,7 @@ int main(void) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
             .pNext = NULL,
             .flags = 0,
-            .rasterizationSamples = VK_SAMPLE_COUNT_8_BIT,
+            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
             .sampleShadingEnable = VK_FALSE,
             .minSampleShading = 0.0,
             .pSampleMask = NULL,
@@ -506,7 +490,7 @@ int main(void) {
                             .height = render_size.height,
                             .depth = 1},
         };
-        vkCmdCopyImageToBuffer(draw_buffer, color_images[1], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        vkCmdCopyImageToBuffer(draw_buffer, images[0], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                image_buffer, 1, &copy);
 
         VkBufferMemoryBarrier transfer_barrier = {
@@ -567,10 +551,10 @@ int main(void) {
     vkDestroyFence(device, fence, NULL);
 
     vkDestroyFramebuffer(device, framebuffer, NULL);
-    for (size_t i = 0; i < NELEMS(color_images); i++) {
-        vkDestroyImage(device, color_images[i], NULL);
-        vkDestroyImageView(device, color_views[i], NULL);
-        vkFreeMemory(device, color_image_memories[i], NULL);
+    for (size_t i = 0; i < NELEMS(images); i++) {
+        vkDestroyImage(device, images[i], NULL);
+        vkDestroyImageView(device, views[i], NULL);
+        vkFreeMemory(device, image_memories[i], NULL);
     }
 
     vkDestroyBuffer(device, image_buffer, NULL);
