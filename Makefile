@@ -28,10 +28,10 @@ CUBE_TARGETS = $(foreach img,$(CUBE_VARS),$(subst IMG,$(img),cube%IMG.tif))
 $(CUBE_TARGETS) : cube.bin cube.vert.spv cube.geom.spv cube.frag.spv wireframe.geom.spv color.frag.spv
 	./$<
 
-LIGHTING_VARS = color normal
+LIGHTING_VARS = color normal blend
 LIGHTING_IMAGES = $(foreach img,$(LIGHTING_VARS),$(subst IMG,$(img),lighting_IMG.tif))
 LIGHTING_TARGETS = $(foreach img,$(LIGHTING_VARS),$(subst IMG,$(img),lighting%IMG.tif))
-$(LIGHTING_TARGETS) : lighting.bin lighting.vert.spv lighting.geom.spv lighting.frag.spv
+$(LIGHTING_TARGETS) : lighting.bin lighting.vert.spv lighting.geom.spv lighting.frag.spv rasterize.vert.spv pixel.frag.spv
 	./$<
 
 rasterize.tif : rasterize.bin rasterize.vert.spv rasterize.frag.spv
