@@ -16,7 +16,10 @@ int writeTiff(char const * const filename, char const * const data,
     TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, sample_bits);
     TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
     TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-    TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+    if (nchannels == 1)
+        TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
+    else
+        TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
 
     for (size_t i = 0; i < size.height; i++) {
         if (TIFFWriteScanline(tif, (void *) &data[i * size.width * nchannels], i, 0) < 0) {
