@@ -542,7 +542,7 @@ int main(void) {
 
         VkBufferMemoryBarrier transfer_barriers[NELEMS(image_buffers)];
         for (size_t j = 0; j < NELEMS(transfer_barriers); j++) {
-            VkBufferMemoryBarrier template_barrier = {
+            transfer_barriers[j] = (VkBufferMemoryBarrier) {
                 .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
                 .pNext = 0,
                 .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -553,7 +553,6 @@ int main(void) {
                 .offset = 0,
                 .size = VK_WHOLE_SIZE,
             };
-            transfer_barriers[j] = template_barrier;
         }
         vkCmdPipelineBarrier(draw_buffers[i], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, NULL, NELEMS(transfer_barriers), transfer_barriers, 0, NULL);
         assert(vkEndCommandBuffer(draw_buffers[i]) == VK_SUCCESS);
@@ -580,14 +579,13 @@ int main(void) {
         for (size_t i = 0; i < NELEMS(image_buffers); i++) {
             assert(vkMapMemory(device, image_buffer_memories[i], 0, VK_WHOLE_SIZE, 0, (void **) &image_data[i]) == VK_SUCCESS);
 
-            VkMappedMemoryRange template_flush = {
+            image_flushes[i] = (VkMappedMemoryRange) {
                 .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                 .pNext = NULL,
                 .memory = image_buffer_memories[i],
                 .offset = 0,
                 .size = VK_WHOLE_SIZE,
             };
-            image_flushes[i] = template_flush;
         }
 
         VkSubmitInfo submit_info = {
