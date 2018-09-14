@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
+#include <stdbool.h>
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
 debugReportCallback(VkDebugReportFlagsEXT flags __attribute__((unused)),
@@ -16,8 +17,20 @@ debugReportCallback(VkDebugReportFlagsEXT flags __attribute__((unused)),
     return VK_TRUE;
 }
 
-void createFrameImage(VkDevice device, VkExtent2D size,
-                      VkFormat format, VkSampleCountFlagBits samples,
+int32_t findMemory(VkPhysicalDeviceMemoryProperties properties,
+                   uint32_t memory_type_bits, VkMemoryPropertyFlags requirements) {
+    for (uint32_t idx = 0; idx < properties.memoryTypeCount; idx += 1) {
+        const bool properties_match =
+            (properties.memoryTypes[idx].propertyFlags & requirements) == requirements;
+        const bool idx_match = memory_type_bits & (1 << idx);
+        if (properties_match && idx_match)
+            return (int32_t) idx;
+    }
+    return -1;
+};
+
+void createFrameImage(VkPhysicalDeviceMemoryProperties memory_properties, VkDevice device,
+                      VkExtent2D size, VkFormat format, VkSampleCountFlagBits samples,
                       VkImageUsageFlags usage, VkImageAspectFlags aspect,
                       VkImage* image, VkDeviceMemory* memory, VkImageView* view) {
     {
@@ -42,12 +55,14 @@ void createFrameImage(VkDevice device, VkExtent2D size,
     {
         VkMemoryRequirements memory_requirements;
         vkGetImageMemoryRequirements(device, *image, &memory_requirements);
+        int32_t memory_type_idx = findMemory(memory_properties, memory_requirements.memoryTypeBits, 0);
+        assert(memory_type_idx >= 0);
 
         VkMemoryAllocateInfo allocate_info = {
             .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
             .pNext = NULL,
             .allocationSize = memory_requirements.size,
-            .memoryTypeIndex = 0,
+            .memoryTypeIndex = memory_type_idx,
         };
         assert(vkAllocateMemory(device, &allocate_info, NULL, memory) == VK_SUCCESS);
     }
@@ -95,8 +110,8 @@ void createFramebuffer(VkDevice device, VkExtent2D size,
     assert(vkCreateFramebuffer(device, &create_info, NULL, framebuffer) == VK_SUCCESS);
 }
 
-void createBuffer(VkDevice device, VkBufferUsageFlags usage,
-                  size_t size, const void * data,
+void createBuffer(VkPhysicalDeviceMemoryProperties memory_properties, VkDevice device,
+                  VkBufferUsageFlags usage, size_t size, const void * data,
                   VkBuffer* buffer, VkDeviceMemory* memory) {
     VkBufferCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -112,12 +127,13 @@ void createBuffer(VkDevice device, VkBufferUsageFlags usage,
     VkMemoryRequirements memory_requirements;
     vkGetBufferMemoryRequirements(device, *buffer, &memory_requirements);
 
+    int32_t memory_type_idx = findMemory(memory_properties, memory_requirements.memoryTypeBits, 0);
+    assert(memory_type_idx >= 0);
     VkMemoryAllocateInfo allocate_info = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext = NULL,
         .allocationSize = memory_requirements.size,
-        // VK_MEMORY_PROPERTY_HOST_VISISBLE_BIT
-        .memoryTypeIndex = 0,
+        .memoryTypeIndex = memory_type_idx,
     };
 
     assert(vkAllocateMemory(device, &allocate_info, NULL, memory) == VK_SUCCESS);

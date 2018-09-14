@@ -103,6 +103,9 @@ int main(void) {
         free(phy_devices);
     }
 
+    VkPhysicalDeviceMemoryProperties memory_properties;
+    vkGetPhysicalDeviceMemoryProperties(phy_device, &memory_properties);
+
     VkDevice device;
     {
         float queue_priorities[] = {1.0};
@@ -210,18 +213,19 @@ int main(void) {
     VkImage images[1];
     VkDeviceMemory image_memories[NELEMS(images)];
     VkImageView views[NELEMS(images)];
-    createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT,
+    createFrameImage(memory_properties, device, render_size,
+                     VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT,
                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                      VK_IMAGE_ASPECT_COLOR_BIT,
                      &images[0], &image_memories[0], &views[0]);
 
     VkBuffer lines_buffer;
     VkDeviceMemory lines_memory;
-    createBuffer(device, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(lines), lines, &lines_buffer, &lines_memory);
+    createBuffer(memory_properties, device, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(lines), lines, &lines_buffer, &lines_memory);
 
     VkBuffer image_buffer;
     VkDeviceMemory image_buffer_memory;
-    createBuffer(device, VK_BUFFER_USAGE_TRANSFER_DST_BIT, render_size.height * render_size.width * 4, NULL, &image_buffer, &image_buffer_memory);
+    createBuffer(memory_properties, device, VK_BUFFER_USAGE_TRANSFER_DST_BIT, render_size.height * render_size.width * 4, NULL, &image_buffer, &image_buffer_memory);
 
     VkFramebuffer framebuffer;
     createFramebuffer(device, render_size, NELEMS(images), views, render_pass, &framebuffer);

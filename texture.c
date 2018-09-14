@@ -106,6 +106,9 @@ int main(void) {
         free(phy_devices);
     }
 
+    VkPhysicalDeviceMemoryProperties memory_properties;
+    vkGetPhysicalDeviceMemoryProperties(phy_device, &memory_properties);
+
     VkDevice device;
     {
         float queue_priorities[] = {1.0};
@@ -226,10 +229,12 @@ int main(void) {
     VkImage color_images[2];
     VkDeviceMemory color_image_memories[NELEMS(color_images)];
     VkImageView color_views[NELEMS(color_images)];
-    createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_8_BIT,
+    createFrameImage(memory_properties, device, render_size,
+                     VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_8_BIT,
                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
                      &color_images[0], &color_image_memories[0], &color_views[0]);
-    createFrameImage(device, render_size, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT,
+    createFrameImage(memory_properties, device, render_size,
+                     VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT,
                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                      VK_IMAGE_ASPECT_COLOR_BIT,
                      &color_images[1], &color_image_memories[1], &color_views[1]);
@@ -265,7 +270,7 @@ int main(void) {
             .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
             .pNext = NULL,
             .allocationSize = memory_requirements.size,
-            .memoryTypeIndex = 0,
+            .memoryTypeIndex = findMemory(memory_properties, memory_requirements.memoryTypeBits, 0),
         };
         assert(vkAllocateMemory(device, &allocate_info, NULL, &tex_memory) == VK_SUCCESS);
 
@@ -331,11 +336,11 @@ int main(void) {
 
     VkBuffer verts_buffer;
     VkDeviceMemory verts_memory;
-    createBuffer(device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(verts), verts, &verts_buffer, &verts_memory);
+    createBuffer(memory_properties, device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(verts), verts, &verts_buffer, &verts_memory);
 
     VkBuffer image_buffer;
     VkDeviceMemory image_buffer_memory;
-    createBuffer(device, VK_BUFFER_USAGE_TRANSFER_DST_BIT, render_size.height * render_size.width * 4, NULL, &image_buffer, &image_buffer_memory);
+    createBuffer(memory_properties, device, VK_BUFFER_USAGE_TRANSFER_DST_BIT, render_size.height * render_size.width * 4, NULL, &image_buffer, &image_buffer_memory);
 
     VkFramebuffer framebuffer;
     createFramebuffer(device, render_size, 2, color_views, render_pass, &framebuffer);
