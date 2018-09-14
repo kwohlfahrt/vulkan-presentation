@@ -1,5 +1,4 @@
 #version 450
-#extension KHR_vulkan_glsl : enable
 
 layout (location = 0) out vec2 screen_pos;
 

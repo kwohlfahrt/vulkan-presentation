@@ -1,5 +1,4 @@
 #version 450
-#extension KHR_vulkan_glsl : enable
 
 layout (triangles) in;
 layout (location = 0) in vec3 pos[];

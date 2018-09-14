@@ -1,6 +1,4 @@
 #version 450
-// glslang enables this but doesn't advertise it
-#extension KHR_vulkan_glsl : enable
 
 layout (location = 0) in vec2 screen_pos;
 

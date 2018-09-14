@@ -1,6 +1,4 @@
 #version 450
-// glslang enables this but doesn't advertise it
-#extension KHR_vulkan_glsl : enable
 
 // gl_PrimitiveID seems to be broken
 layout (location = 0) in vec3 in_color;

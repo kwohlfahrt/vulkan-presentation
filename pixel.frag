@@ -1,6 +1,4 @@
 #version 450
-// glslang enables this but doesn't advertise it
-#extension KHR_vulkan_glsl : enable
 
 layout (input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput in_color;
 layout (input_attachment_index = 1, set = 0, binding = 1) uniform subpassInput in_normal;
