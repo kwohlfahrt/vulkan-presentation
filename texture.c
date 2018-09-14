@@ -98,10 +98,12 @@ int main(void) {
     VkPhysicalDevice phy_device;
     {
         uint32_t num_devices;
-        vkEnumeratePhysicalDevices(instance, &num_devices, NULL);
+        assert(vkEnumeratePhysicalDevices(instance, &num_devices, NULL) == VK_SUCCESS);
         assert(num_devices >= 1);
-        num_devices = 1;
-        assert(vkEnumeratePhysicalDevices(instance, &num_devices, &phy_device) == VK_SUCCESS);
+        VkPhysicalDevice * phy_devices = malloc(sizeof(*phy_devices) * num_devices);
+        assert(vkEnumeratePhysicalDevices(instance, &num_devices, phy_devices) == VK_SUCCESS);
+        phy_device = phy_devices[0];
+        free(phy_devices);
     }
 
     VkDevice device;
