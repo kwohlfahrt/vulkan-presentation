@@ -6,4 +6,5 @@
 int writeTiff(char const * const filename, char const * const data,
               const VkExtent2D size, const size_t nchannels);
 
-int readTiffRGBA(char const * const filename, VkExtent2D * const size, uint32_t * const data) ;
+int readTiffRGBA(char const * const filename, VkExtent2D * const size,
+                 VkSubresourceLayout * layout, uint8_t * const data) ;

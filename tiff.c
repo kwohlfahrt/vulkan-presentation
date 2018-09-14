@@ -1,6 +1,7 @@
 #include "tiff.h"
 
 #include <tiffio.h>
+#include <stdlib.h>
 
 int writeTiff(char const * const filename, char const * const data,
               const VkExtent2D size, const size_t nchannels) {
@@ -32,7 +33,10 @@ int writeTiff(char const * const filename, char const * const data,
     return 0;
 }
 
-int readTiffRGBA(char const * const filename, VkExtent2D * const size, uint32_t * const data) {
+int readTiffRGBA(char const * const filename, VkExtent2D * const size,
+                 VkSubresourceLayout * layout, uint8_t * const data) {
+    const uint32_t nchannels = 4;
+
     TIFF * tif = TIFFOpen(filename, "r");
     if (tif == NULL)
         return 1;
@@ -41,12 +45,25 @@ int readTiffRGBA(char const * const filename, VkExtent2D * const size, uint32_t 
         TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &size->height);
         TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &size->width);
     } else {
-        if (!TIFFReadRGBAImage(tif, size->width, size->height, data, 0)){
-            TIFFClose(tif);
-            return 1;
-        }
+        if (layout == NULL || size == NULL)
+            goto cleanup;
+
+        char * const temp = malloc(nchannels * size->width * size->height);
+        if (!TIFFReadRGBAImage(tif, size->width, size->height, (uint32_t*) temp, 0))
+            goto cleanup;
+
+        for (size_t x = 0; x < size->width; x++)
+            for (size_t y = 0; y < size->height; y++)
+                for (size_t ch = 0; ch < nchannels; ch++) {
+                    data[ch + x * nchannels + y * layout->rowPitch] =
+                        temp[ch + x * nchannels + y * size->width * nchannels];
+                }
+        free(temp);
     }
 
     TIFFClose(tif);
     return 0;
+ cleanup:
+    TIFFClose(tif);
+    return 1;
 }

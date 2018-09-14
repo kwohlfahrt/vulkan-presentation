@@ -243,7 +243,7 @@ int main(void) {
     VkDeviceMemory tex_memory;
     {
         VkExtent2D image_size;
-        readTiffRGBA("data/kitten.tif", &image_size, NULL);
+        assert(readTiffRGBA("data/kitten.tif", &image_size, NULL, NULL) == 0);
 
         VkImageCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -251,7 +251,11 @@ int main(void) {
             .flags = 0,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = VK_FORMAT_R8G8B8A8_UNORM, // R8G8B8 not supported with linear tiling
-            .extent = {image_size.width, image_size.height, 1,},
+            .extent = {
+                .width = image_size.width,
+                .height = image_size.height,
+                .depth = 1,
+            },
             .mipLevels = 1,
             .arrayLayers = 1,
             .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -274,9 +278,19 @@ int main(void) {
         };
         assert(vkAllocateMemory(device, &allocate_info, NULL, &tex_memory) == VK_SUCCESS);
 
+        VkSubresourceLayout tex_layout;
+        {
+            VkImageSubresource subresource = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel = 0,
+                .arrayLayer = 0,
+            };
+            vkGetImageSubresourceLayout(device, tex_image, &subresource, &tex_layout);
+        }
+
         void * data;
         assert(vkMapMemory(device, tex_memory, 0, VK_WHOLE_SIZE, 0, &data) == VK_SUCCESS);
-        readTiffRGBA("data/kitten.tif", &image_size, data);
+        assert(readTiffRGBA("data/kitten.tif", &image_size, &tex_layout, data) == 0);
         VkMappedMemoryRange flush_range = {
             .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .pNext = NULL,
             .memory = tex_memory,
@@ -643,7 +657,7 @@ int main(void) {
                 .layerCount = 1,
             },
         };
-        vkCmdPipelineBarrier(setup_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, NULL, 0, NULL, 1, &tex_barrier);
+        vkCmdPipelineBarrier(setup_buffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &tex_barrier);
         assert(vkEndCommandBuffer(setup_buffer) == VK_SUCCESS);
 
         VkSubmitInfo submit_info = {
