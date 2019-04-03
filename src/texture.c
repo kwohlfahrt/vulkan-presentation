@@ -243,7 +243,7 @@ int main(void) {
     VkDeviceMemory tex_memory;
     {
         VkExtent2D image_size;
-        assert(readTiffRGBA("data/kitten.tif", &image_size, NULL, NULL) == 0);
+        assert(readTiffRGBA("../data/kitten.tif", &image_size, NULL, NULL) == 0);
 
         VkImageCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -290,7 +290,7 @@ int main(void) {
 
         void * data;
         assert(vkMapMemory(device, tex_memory, 0, VK_WHOLE_SIZE, 0, &data) == VK_SUCCESS);
-        assert(readTiffRGBA("data/kitten.tif", &image_size, &tex_layout, data) == 0);
+        assert(readTiffRGBA("../data/kitten.tif", &image_size, &tex_layout, data) == 0);
         VkMappedMemoryRange flush_range = {
             .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .pNext = NULL,
             .memory = tex_memory,
